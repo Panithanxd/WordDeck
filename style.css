@@ -1,0 +1,168 @@
+/* ===== WordDeck — style.css (แยกจาก vocab-trainer.html เดิม) ===== */
+:root{
+  --bg:#EDF1F5; --paper:#FFFFFF; --ink:#1B2A41; --muted:#5C6B80; --line:#D3DBE5;
+  --sea:#0F7C8C; --sea-soft:#D9EEF1; --amber:#E9A825; --amber-soft:#FBEFD0; --coral:#D95D4F; --coral-soft:#F9DEDA;
+  --radius:14px;
+}
+:root:not([data-theme="light"]){ @media (prefers-color-scheme: dark){
+  --bg:#141A22; --paper:#1E2733; --ink:#EEF2F7; --muted:#9AA8BA; --line:#31404F;
+  --sea:#4FC3D2; --sea-soft:#173F46; --amber:#F2C24C; --amber-soft:#3F3418; --coral:#F07B6C; --coral-soft:#4A2521;
+}}
+:root[data-theme="dark"]{
+  --bg:#141A22; --paper:#1E2733; --ink:#EEF2F7; --muted:#9AA8BA; --line:#31404F;
+  --sea:#4FC3D2; --sea-soft:#173F46; --amber:#F2C24C; --amber-soft:#3F3418; --coral:#F07B6C; --coral-soft:#4A2521;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Sarabun",system-ui,sans-serif;font-size:16px;line-height:1.55}
+.word-en{font-family:"Lora",Georgia,serif}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;max-width:900px;margin:0 auto}
+header h1{margin:0;font-size:22px;font-weight:700}
+header h1 span{color:var(--sea)}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+nav button{background:transparent;border:1px solid transparent;color:var(--muted);padding:8px 14px;border-radius:999px;font:inherit;cursor:pointer;font-weight:600}
+nav button.active{background:var(--paper);color:var(--ink);border-color:var(--line)}
+nav button:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--sea);outline-offset:2px}
+main{max-width:900px;margin:0 auto;padding:8px 20px 60px}
+.panel{display:none}.panel.active{display:block}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+select,input[type=text],textarea{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink)}
+.btn{font:inherit;font-weight:600;padding:10px 18px;border-radius:10px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--sea);border-color:var(--sea);color:#fff}
+.btn.good{background:var(--sea-soft);border-color:transparent;color:var(--sea)}
+.btn.again{background:var(--coral-soft);border-color:transparent;color:var(--coral)}
+.btn:disabled{opacity:.5;cursor:default}
+.stat{color:var(--muted);font-size:14px}
+
+/* flashcard */
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:36px 28px;min-height:340px;display:flex;flex-direction:column;justify-content:center;text-align:center;position:relative}
+.card .pos{color:var(--muted);font-size:14px;margin-bottom:6px}
+.card .big{font-size:clamp(40px,8vw,64px);font-weight:700;line-height:1.05;margin:0}
+.card .ipa{color:var(--sea);font-size:20px;margin:8px 0 18px;font-family:"Lora",serif}
+.speak{display:inline-flex;align-items:center;gap:8px;background:var(--sea);color:#fff;border:0;border-radius:999px;padding:10px 20px;font:inherit;font-weight:600;cursor:pointer;margin:0 auto}
+.speak.slow{background:var(--paper);color:var(--sea);border:1px solid var(--sea)}
+.card .back{margin-top:22px;border-top:1px dashed var(--line);padding-top:20px;text-align:left}
+.card .meaning{font-size:24px;font-weight:700;margin:0 0 12px;text-align:center}
+.ex{margin:10px 0;padding:12px 14px;background:var(--bg);border-radius:10px;display:flex;gap:10px;align-items:flex-start}
+.ex .en{font-family:"Lora",serif;font-size:17px}
+.ex .en b{color:var(--sea)}
+.ex .th{color:var(--muted);font-size:14px;margin-top:2px}
+.ex button{flex:none;background:transparent;border:1px solid var(--line);border-radius:8px;padding:4px 8px;cursor:pointer;color:var(--sea);font-size:14px}
+.actions{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+.box{position:absolute;top:12px;right:14px;font-size:12px;color:var(--muted)}
+.progress{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin:14px 0}
+.progress i{display:block;height:100%;background:var(--sea);width:0;transition:width .3s}
+
+/* quiz */
+.q{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:28px}
+.q .prompt{font-size:32px;font-weight:700;text-align:center;margin:0 0 6px}
+.choices{display:grid;gap:10px;margin-top:20px}
+.choices button{font:inherit;text-align:left;padding:14px 16px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;font-size:17px}
+.choices button.correct{background:var(--sea-soft);border-color:var(--sea)}
+.choices button.wrong{background:var(--coral-soft);border-color:var(--coral)}
+.feedback{margin-top:14px;text-align:center;min-height:24px;font-weight:600}
+
+/* pronounce */
+.mic{width:110px;height:110px;border-radius:50%;border:0;background:var(--coral);color:#fff;font-size:40px;cursor:pointer;margin:16px auto;display:block;transition:transform .15s}
+.mic.on{transform:scale(1.1);box-shadow:0 0 0 12px var(--coral-soft)}
+.heard{font-family:"Lora",serif;font-size:22px;text-align:center;margin:8px 0;min-height:32px}
+.score{text-align:center;font-weight:700;font-size:20px}
+
+/* list */
+table{width:100%;border-collapse:collapse;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:13px;color:var(--muted);font-weight:600}
+tr:last-child td{border-bottom:0}
+td .word-en{font-weight:700;font-size:17px}
+.tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;background:var(--bg);color:var(--muted)}
+.tag.b3{background:var(--sea-soft);color:var(--sea)}.tag.b0{background:var(--coral-soft);color:var(--coral)}.tag.b1,.tag.b2{background:var(--amber-soft);color:#8a5f00}
+.tblwrap{overflow-x:auto}
+form.add{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:20px;display:grid;gap:10px;grid-template-columns:1fr 1fr;margin-bottom:18px}
+form.add textarea,form.add .full{grid-column:1/-1}
+form.add label{font-size:13px;color:var(--muted);display:block;margin-bottom:4px}
+.icon{background:transparent;border:0;cursor:pointer;color:var(--muted);font-size:16px}
+.empty{text-align:center;color:var(--muted);padding:40px}
+.hero{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin:6px 0 14px}
+.streak{background:var(--amber-soft);color:#8a5f00;padding:8px 14px;border-radius:999px;font-weight:600}
+.counts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.counts div{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center}
+.counts b{display:block;font-size:24px;color:var(--sea)}.counts span{font-size:12px;color:var(--muted)}
+.timeline{position:relative;padding-left:26px;margin-top:8px}
+.timeline:before{content:"";position:absolute;left:9px;top:8px;bottom:8px;width:2px;background:var(--line)}
+.sess{position:relative;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;gap:12px;align-items:center}
+.sess:before{content:"";position:absolute;left:-23px;top:18px;width:12px;height:12px;border-radius:50%;background:var(--line);border:2px solid var(--bg)}
+.sess.done{opacity:.6}.sess.done:before{background:var(--sea)}
+.sess.now{border-color:var(--sea);box-shadow:0 0 0 3px var(--sea-soft)}.sess.now:before{background:var(--amber)}
+.sess .t{font-family:"Lora",serif;font-weight:700;font-size:18px;width:58px;flex:none}
+.sess .n{flex:1}.sess .n small{color:var(--muted);display:block}
+.editor{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:16px;margin:10px 0}
+.editor .row{display:grid;grid-template-columns:90px 1fr 70px 32px;gap:8px;margin-bottom:8px;align-items:center}
+.editor input,.editor select{width:100%}
+.typein{font:inherit;font-family:"Lora",serif;font-size:22px;text-align:center;padding:10px;border:2px solid var(--line);border-radius:10px;width:100%;max-width:360px;background:var(--bg);color:var(--ink)}
+@media (max-width:600px){.counts{grid-template-columns:repeat(2,1fr)}.editor .row{grid-template-columns:80px 1fr 60px 28px}form.add{grid-template-columns:1fr}.card{padding:28px 18px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ===== เพิ่มเติม: PWA / มือถือ ===== */
+header{position:sticky;top:0;z-index:20;background:var(--bg);padding-top:calc(12px + env(safe-area-inset-top))}
+header .hdr-actions{display:flex;gap:6px;align-items:center}
+.btn.small{padding:6px 12px;font-size:14px}
+#installBtn[hidden]{display:none}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:50;max-width:92vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+.toast button{background:var(--sea);color:#fff;border:0;border-radius:999px;padding:4px 12px;margin-left:8px;font:inherit;font-size:13px;cursor:pointer}
+@media (max-width:600px){
+  header{flex-direction:column;align-items:stretch;padding:10px 12px}
+  header h1{text-align:center}
+  nav{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
+  nav::-webkit-scrollbar{display:none}
+  nav button{flex:none;padding:7px 12px;font-size:14px}
+  main{padding:8px 12px 40px}
+  .q{padding:18px 14px}.q .prompt{font-size:26px}
+}
+
+/* ===== สถิติ ===== */
+.stats-grid{display:grid;gap:14px}
+.stat-card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.stat-card h3{margin:0 0 10px;font-size:16px}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cal-head b{font-family:"Lora",serif;font-size:17px}
+.cal-legend{font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.cal-legend i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.calendar .dow{text-align:center;font-size:12px;color:var(--muted);padding:2px 0}
+.cday{aspect-ratio:1;display:grid;place-items:center;border-radius:8px;font-size:14px;background:var(--bg);position:relative}
+.cday.empty{background:transparent}
+.cday.today{outline:2px solid var(--sea);outline-offset:-2px}
+.cday.pass{background:var(--sea);color:#fff;font-weight:700}
+.cday.pass::after{content:"✓";position:absolute;right:4px;bottom:1px;font-size:10px}
+.cday.fail{background:var(--amber-soft);color:#8a5f00}
+.cday.study{background:var(--sea-soft);color:var(--sea)}
+.boxchart{display:flex;align-items:flex-end;gap:8px;height:160px;padding-top:22px}
+.boxcol{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
+.boxbar{width:100%;background:var(--sea);border-radius:6px 6px 0 0;min-height:3px;position:relative;transition:height .4s}
+.boxbar.b0{background:var(--coral)}.boxbar.bn{background:var(--line)}
+.boxbar span{position:absolute;top:-20px;left:0;right:0;text-align:center;font-size:13px;font-weight:700}
+.boxlbl{font-size:12px;color:var(--muted);margin-top:4px;text-align:center;line-height:1.2}
+.wrong{list-style:none;margin:0;padding:0}
+.wrong li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.wrong li:last-child{border-bottom:0}
+.wrong .rank{width:24px;height:24px;border-radius:50%;background:var(--coral-soft);color:var(--coral);display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
+.wrong .word-en{font-weight:700}
+.wrong .cnt{margin-left:auto;color:var(--coral);font-weight:600;font-size:14px;white-space:nowrap}
+.wrong .m{color:var(--muted);font-size:13px}
+
+/* ===== มือถือ: ให้ปุ่มในแถบเครื่องมือเรียงต่อกันแทนที่จะขึ้นบรรทัดละปุ่ม ===== */
+@media (max-width:600px){
+  .toolbar>div{display:contents}
+  .toolbar{gap:8px}
+  .toolbar .btn{padding:8px 12px;font-size:14px}
+  header .hdr-actions{position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px}
+  header{position:sticky;padding-top:calc(10px + env(safe-area-inset-top))}
+  header h1{font-size:20px;text-align:left}
+  .hero h2{font-size:19px}
+  .counts b{font-size:21px}
+  .sess{padding:10px 12px;gap:8px}
+  .sess .t{width:48px;font-size:16px}
+  .timeline{padding-left:20px}
+  .timeline:before{left:6px}
+  .sess:before{left:-17px}
+}

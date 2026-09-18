@@ -1,0 +1,28 @@
+{
+  "name": "WordDeck — ฝึกคำศัพท์ภาษาอังกฤษ",
+  "short_name": "WordDeck",
+  "description": "ฝึกคำศัพท์ภาษาอังกฤษทุกวัน แบบ Leitner flashcard ฝึกออกเสียง ใช้ออฟไลน์ได้",
+  "lang": "th",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "id": "/WordDeck/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#EDF1F5",
+  "theme_color": "#0F7C8C",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "ท่องศัพท์", "short_name": "ท่องศัพท์", "url": "./?p=flash", "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "มินิเทสต์", "short_name": "เทสต์", "url": "./?p=quiz", "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "ฝึกออกเสียง", "short_name": "ออกเสียง", "url": "./?p=speak", "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

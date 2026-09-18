@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WordDeck — ฝึกคำศัพท์ภาษาอังกฤษ</title>
+<meta name="description" content="WordDeck — ฝึกคำศัพท์ภาษาอังกฤษทุกวัน แบบ Leitner flashcard ใช้ออฟไลน์ได้">
+<meta name="theme-color" content="#0F7C8C">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="WordDeck">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,700;1,500&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header>
+  <h1>Word<span>Deck</span></h1>
+  <nav>
+    <button class="active" data-p="today">วันนี้</button>
+    <button data-p="flash">ท่องศัพท์</button>
+    <button data-p="quiz">ทดสอบ</button>
+    <button data-p="speak">ฝึกออกเสียง</button>
+    <button data-p="list">คลังคำศัพท์</button>
+    <button data-p="stats">สถิติ</button>
+  </nav>
+  <div class="hdr-actions">
+    <button class="btn small primary" id="installBtn" hidden>⬇ ติดตั้งแอป</button>
+    <button class="btn small" id="themeBtn" title="สลับโหมดมืด/สว่าง">☾</button>
+  </div>
+</header>
+
+<main>
+<!-- ===== TODAY ===== -->
+<section class="panel active" id="p-today">
+  <div class="hero">
+    <div><div class="stat" id="t-date"></div><h2 id="t-title" style="margin:4px 0 0"></h2></div>
+    <div class="streak">🔥 <b id="streak">0</b> วันติด</div>
+  </div>
+  <div class="counts" id="t-counts"></div>
+  <div class="toolbar" style="justify-content:space-between">
+    <div><button class="btn primary" id="t-start">▶ เริ่มช่วงถัดไป</button> <button class="btn" id="t-extra">+ เรียนเพิ่ม 5 คำ</button></div>
+    <div><button class="btn" id="t-notif">🔔 เปิดแจ้งเตือน</button> <button class="btn" id="t-ics" title="นำไปใส่ Google Calendar">📅 ดาวน์โหลด .ics</button> <button class="btn" id="t-edit">⚙ ตั้งเวลา</button></div>
+  </div>
+  <p class="stat" id="notif-msg"></p>
+  <div class="timeline" id="timeline"></div>
+  <div id="t-editor" class="editor" hidden></div>
+  <div id="runner" hidden></div>
+</section>
+
+<!-- ===== FLASHCARDS ===== -->
+<section class="panel" id="p-flash">
+  <div class="toolbar">
+    <select id="f-cat"></select>
+    <select id="f-mode">
+      <option value="due">เฉพาะคำที่ถึงเวลาทบทวน</option>
+      <option value="all">ทุกคำ</option>
+      <option value="new">เฉพาะคำใหม่</option>
+    </select>
+    <label class="stat">เสียง <select id="voice"></select></label>
+    <span class="stat" id="f-stat"></span>
+  </div>
+  <div class="progress"><i id="f-bar"></i></div>
+  <div class="card" id="f-card"></div>
+  <div class="actions" id="f-actions"></div>
+  <p class="stat" style="text-align:center;margin-top:14px">คีย์ลัด: Space = พลิก/ฟัง · 1 = ยังไม่ได้ · 2 = จำได้</p>
+</section>
+
+<!-- ===== QUIZ ===== -->
+<section class="panel" id="p-quiz">
+  <div class="toolbar">
+    <select id="q-cat"></select>
+    <select id="q-type">
+      <option value="en2th">เห็นคำอังกฤษ → เลือกความหมาย</option>
+      <option value="th2en">เห็นความหมาย → เลือกคำอังกฤษ</option>
+      <option value="listen">ฟังเสียง → เลือกคำ</option>
+      <option value="fill">เติมคำในประโยค</option>
+    </select>
+    <span class="stat" id="q-stat">ถูก 0 / 0</span>
+  </div>
+  <div class="q" id="q-box"></div>
+</section>
+
+<!-- ===== PRONUNCIATION ===== -->
+<section class="panel" id="p-speak">
+  <div class="toolbar">
+    <select id="s-cat"></select>
+    <button class="btn" id="s-next">คำถัดไป</button>
+  </div>
+  <div class="card" id="s-card"></div>
+  <button class="mic" id="mic" title="กดค้างแล้วพูด">🎙</button>
+  <p class="stat" style="text-align:center" id="s-hint">กดไมค์ แล้วพูดคำนี้</p>
+  <div class="heard" id="heard"></div>
+  <div class="score" id="s-score"></div>
+</section>
+
+<!-- ===== LIST ===== -->
+<section class="panel" id="p-list">
+  <form class="add" id="addForm">
+    <div><label>คำศัพท์ (English)</label><input type="text" id="a-word" required style="width:100%"></div>
+    <div><label>ความหมาย (ไทย)</label><input type="text" id="a-th" required style="width:100%"></div>
+    <div><label>IPA</label><input type="text" id="a-ipa" placeholder="/ˈwɜːd/" style="width:100%"></div>
+    <div><label>ชนิดคำ</label><input type="text" id="a-pos" placeholder="noun / verb / adj" style="width:100%"></div>
+    <div class="full"><label>หมวด</label><input type="text" id="a-cat" list="catList" placeholder="เช่น Work" style="width:100%"><datalist id="catList"></datalist></div>
+    <div class="full"><label>ตัวอย่างประโยค (บรรทัดละ 1 ประโยค, ใส่ | คั่นคำแปล)</label>
+      <textarea id="a-ex" rows="2" placeholder="I need to fix this machine. | ฉันต้องซ่อมเครื่องนี้"></textarea></div>
+    <div class="full"><button class="btn primary" type="submit">เพิ่มคำศัพท์</button>
+      <button class="btn" type="button" id="resetProg">ล้างความคืบหน้า</button>
+      <button class="btn" type="button" id="exportBtn">Export JSON</button>
+      <label class="btn" style="display:inline-block">Import JSON <input type="file" id="importFile" accept=".json" hidden></label>
+    </div>
+  </form>
+  <div class="toolbar"><input type="text" id="search" placeholder="ค้นหาคำ..." style="flex:1"><select id="l-cat"></select><span class="stat" id="l-count"></span></div>
+  <div class="tblwrap"><table><thead><tr><th>คำ</th><th>ความหมาย</th><th>หมวด</th><th>สถานะ</th><th></th></tr></thead><tbody id="l-body"></tbody></table></div>
+</section>
+
+<!-- ===== STATS ===== -->
+<section class="panel" id="p-stats">
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="cal-head">
+        <button class="btn small" id="cal-prev">‹</button>
+        <b id="cal-title"></b>
+        <button class="btn small" id="cal-next">›</button>
+      </div>
+      <div class="cal-legend"><span><i style="background:var(--sea)"></i>เทสต์ผ่าน (≥80%)</span><span><i style="background:var(--amber)"></i>ทำเทสต์แต่ยังไม่ผ่าน</span><span><i style="background:var(--sea-soft)"></i>เรียนแล้ว</span></div>
+      <div class="calendar" id="calendar"></div>
+    </div>
+    <div class="stat-card">
+      <h3>จำนวนคำในแต่ละกล่อง Leitner</h3>
+      <div class="boxchart" id="boxchart"></div>
+      <p class="stat" style="margin:8px 0 0">กล่อง 0 = ต้องทบทวนวันนี้ · กล่อง 4 = จำได้ดี (ทบทวนทุก 21 วัน)</p>
+    </div>
+    <div class="stat-card">
+      <h3>10 คำที่ผิดบ่อยที่สุด</h3>
+      <ul class="wrong" id="wrongList"></ul>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="toast" id="toast"></div>
+<script src="./app.js"></script>
+</body>
+</html>
