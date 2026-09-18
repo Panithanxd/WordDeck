@@ -87,7 +87,13 @@ function renderFlash(){
   a.innerHTML=flipped?`<button class="btn again" onclick="grade(false)">1 · ยังไม่ได้</button><button class="btn good" onclick="grade(true)">2 · จำได้</button>`:`<button class="btn primary" onclick="flip()">พลิกดูความหมาย</button>`;
 }
 function flip(){flipped=true;renderFlash();}
-function grade(ok){const w=deck[fi];markGrade(w.id,ok);fi++;flipped=false;renderFlash();}
+function grade(ok){const w=deck[fi];markGrade(w.id,ok);flipped=false;
+  if(ok){fi++;}
+  else{ // จำไม่ได้ → ดันกลับไปอีก 4 ใบข้างหน้า จะได้เจอซ้ำในรอบเดียวกัน
+    deck.splice(fi,1);deck.splice(Math.min(fi+4,deck.length),0,w);
+    toast("จะวนกลับมาถามคำนี้อีกครั้ง");
+  }
+  renderFlash();}
 document.addEventListener("keydown",e=>{if(!$("#p-flash").classList.contains("active")||e.target.tagName==="INPUT")return;if(e.code==="Space"){e.preventDefault();flipped?speak(deck[fi]?.w):flip();}if(flipped&&e.key==="1")grade(false);if(flipped&&e.key==="2")grade(true);});
 $("#f-cat").onchange=$("#f-mode").onchange=startFlash;
 
@@ -153,7 +159,7 @@ $("#importFile").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().th
   save(KEY_WORDS,custom);save(KEY_PROG,prog);save(KEY_SCHED,sched);saveDays();fillCats();renderList();syncScheduleToSW();toast("นำเข้าสำเร็จ");}catch{toast("ไฟล์ไม่ถูกต้อง");}finally{e.target.value="";}});};
 
 /* ---------- TODAY: SCHEDULE + SESSIONS ---------- */
-const TYPES={new:"คำใหม่",review:"ทบทวน",usage:"ฝึกใช้ในประโยค",test:"มินิเทสต์",recap:"ทวนคำวันนี้"};
+const TYPES={new:"คำใหม่",review:"ทบทวน",usage:"ฝึกใช้ในประโยค",test:"มินิเทสต์",recap:"ทวนคำวันนี้",relearn:"ทวนซ้ำ"};
 const DEFAULT_SCHED=[
  {t:"06:15",type:"new",n:5,name:"คำใหม่ตอนเช้า",note:"ตื่นมาฟังเสียง + ดูตัวอย่างประโยค"},
  {t:"09:30",type:"review",n:8,name:"ทบทวนช่วงสาย",note:"พักงาน 3 นาที ดูคำที่ถึงกำหนด"},
@@ -183,7 +189,9 @@ function renderToday(){
   $("#t-title").textContent=next?`ถัดไป ${next.t} · ${next.name}`:"วันนี้ครบทุกช่วงแล้ว 🎉";
   $("#streak").textContent=streak();
   const done=ss.filter(x=>d.done[x.key]).length;
-  $("#t-counts").innerHTML=`<div><b>${d.newWords.length}</b><span>คำใหม่วันนี้</span></div><div><b>${dueWords().length}</b><span>รอทบทวน</span></div><div><b>${done}/${ss.length}</b><span>ช่วงที่ทำแล้ว</span></div><div><b>${d.testScore==null?"–":Math.round(d.testScore*100)+"%"}</b><span>คะแนนเทสต์</span></div>`;
+  const shaky=shakyWords().length;
+  $("#t-counts").innerHTML=`<div><b>${d.newWords.length}</b><span>คำใหม่วันนี้</span></div><div><b>${dueWords().length}</b><span>รอทบทวน</span></div><div><b class="${shaky?"warn":""}">${shaky}</b><span>ยังไม่แม่น</span></div><div><b>${d.testScore==null?"–":Math.round(d.testScore*100)+"%"}</b><span>คะแนนเทสต์</span></div>`;
+  const rb=$("#t-relearn");rb.hidden=!shaky;rb.textContent=`🔁 ทวนคำที่ยังไม่แม่น (${shaky})`;
   $("#t-start").disabled=!next;$("#t-start").textContent=next?`▶ เริ่ม: ${next.name}`:"ครบแล้ว";
   $("#timeline").innerHTML=ss.map(x=>{const isDone=d.done[x.key],isNow=!isDone&&x===next&&nm>=toMin(x.t)-15;
     return `<div class="sess ${isDone?"done":""} ${isNow?"now":""}"><div class="t">${x.t}</div><div class="n">${x.name}<small>${TYPES[x.type]}${x.n?` ${x.n} คำ`:""} · ${x.note||""}</small></div>
@@ -191,6 +199,7 @@ function renderToday(){
   renderNotifButton();
 }
 $("#t-start").onclick=()=>{const d=dayRec();const next=sessions().find(x=>!d.done[x.key]);if(next)runSession(next.key);};
+$("#t-relearn").onclick=()=>runSession("relearn");
 $("#t-extra").onclick=()=>{const d=dayRec();const h=new Date();const t=`${String(h.getHours()).padStart(2,"0")}:${String(h.getMinutes()).padStart(2,"0")}`;d.extra.push({t,type:"new",n:5,name:"เรียนเพิ่ม",note:"เพิ่มเอง"});saveDays();renderToday();runSession("x"+(d.extra.length-1));};
 
 /* editor */
@@ -282,56 +291,220 @@ function buildICS(){
 $("#t-ics").onclick=()=>{const blob=new Blob([buildICS()],{type:"text/calendar;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="worddeck-schedule.ics";a.click();
   toast("ดาวน์โหลดแล้ว — เปิดไฟล์ด้วย Google Calendar แล้วเลือก 'นำเข้า' จะได้เตือนทุกวัน");};
 
-/* session runner */
+/* ---------- session runner (มีระบบทวนซ้ำในตัว) ---------- */
 let run=null;
-function runSession(key){
-  const s=sessions().find(x=>x.key===key);if(!s)return;const d=dayRec();
-  let words=[];
-  if(s.type==="new"){words=pickNew(s.n);if(!words.length)return toast("คำใหม่หมดคลังแล้ว — เพิ่มคำในหน้า 'คลังคำศัพท์'");words.forEach(w=>{if(!d.newWords.includes(w.id))d.newWords.push(w.id);prog[w.id]={box:0,due:0,wrong:0};});save(KEY_PROG,prog);saveDays();}
-  if(s.type==="review"){words=shuffle(dueWords()).slice(0,s.n||8);if(!words.length)words=shuffle(todayWords()).slice(0,s.n||8);}
-  if(s.type==="usage"){words=shuffle([...todayWords(),...dueWords()].filter(w=>w.ex&&w.ex.length)).slice(0,s.n||5);if(!words.length)words=shuffle(allWords().filter(w=>prog[w.id]&&w.ex&&w.ex.length)).slice(0,s.n||5);}
-  if(s.type==="test"){words=shuffle([...todayWords(),...dueWords()]);if(words.length<4)words=shuffle(allWords()).slice(0,s.n||10);words=words.slice(0,s.n||10);}
-  if(s.type==="recap"){words=todayWords();}
-  if(!words.length)return toast("ยังไม่มีคำสำหรับช่วงนี้ — เริ่มจากช่วง 'คำใหม่' ก่อน");
-  goPage("today");
-  run={s,words,i:0,flipped:false,ok:0};$("#runner").hidden=false;$("#timeline").hidden=true;$("#t-editor").hidden=true;renderRun();$("#runner").scrollIntoView({behavior:"smooth"});
+const MAX_TRIES=3;    // ผิดเกินนี้ พักไว้ก่อน แล้วไปโผล่ในช่วง "ทวนคำที่ยังไม่แม่น"
+const REQUEUE_GAP=3;  // ผิดแล้ววนกลับมาถามใหม่หลังผ่านไปกี่คำ
+
+/* คำที่ยังไม่แม่น = เคยเรียนแล้วแต่ยังตกอยู่กล่อง 0 (เรียงคำที่ผิดบ่อยขึ้นก่อน) */
+const shakyWords=()=>allWords().filter(w=>prog[w.id]&&getP(w.id).box===0)
+  .sort((a,b)=>(getP(b.id).wrong||0)-(getP(a.id).wrong||0));
+
+function pickWords(s){
+  const d=dayRec();
+  if(s.type==="new"){const ws=pickNew(s.n);ws.forEach(w=>{if(!d.newWords.includes(w.id))d.newWords.push(w.id);if(!prog[w.id])prog[w.id]={box:0,due:0,wrong:0};});save(KEY_PROG,prog);saveDays();return ws;}
+  if(s.type==="review"){let ws=shuffle(dueWords()).slice(0,s.n||8);if(!ws.length)ws=shuffle(todayWords()).slice(0,s.n||8);return ws;}
+  if(s.type==="usage"){let ws=shuffle([...todayWords(),...dueWords()].filter(w=>w.ex&&w.ex.length)).slice(0,s.n||5);if(!ws.length)ws=shuffle(allWords().filter(w=>prog[w.id]&&w.ex&&w.ex.length)).slice(0,s.n||5);return ws;}
+  if(s.type==="test"){let ws=shuffle([...todayWords(),...dueWords()]);if(ws.length<4)ws=shuffle(allWords()).slice(0,s.n||10);return ws.slice(0,s.n||10);}
+  if(s.type==="recap")return shuffle(todayWords());
+  if(s.type==="relearn")return shakyWords().slice(0,s.n||10);
+  return [];
 }
-function endRun(){const d=dayRec();d.done[run.s.key]=true;if(run.s.type==="test")d.testScore=run.ok/run.words.length;saveDays();run=null;$("#runner").hidden=true;$("#timeline").hidden=false;renderToday();syncScheduleToSW();}
-function renderRun(){
-  const {s,words,i}=run,w=words[i],R=$("#runner");
-  const head=`<div class="toolbar" style="justify-content:space-between"><b>${s.name} · ${TYPES[s.type]}</b><span class="stat">${Math.min(i+1,words.length)} / ${words.length}</span><button class="btn" onclick="if(confirm('ออกโดยยังไม่นับว่าทำแล้ว?')){run=null;$('#runner').hidden=true;$('#timeline').hidden=false;}">ออก</button></div><div class="progress"><i style="width:${i/words.length*100}%"></i></div>`;
-  if(i>=words.length){R.innerHTML=head+`<div class="card"><div class="empty">${s.type==="test"?`คะแนน ${run.ok}/${words.length} (${Math.round(run.ok/words.length*100)}%) ${run.ok/words.length>=0.8?"✅ ผ่าน":"🔁 ยังไม่ถึง 80% — ทำอีกรอบตอนค่ำได้"}`:"เสร็จช่วงนี้แล้ว 👍"}</div></div><div class="actions"><button class="btn primary" onclick="endRun()">บันทึกและกลับหน้าวันนี้</button></div>`;return;}
-  if(s.type==="new"||s.type==="review"||s.type==="recap"){
-    const showBack=run.flipped||s.type==="new"||s.type==="recap";
-    R.innerHTML=head+`<div class="card"><div class="pos">${w.pos||""}</div><h2 class="big word-en">${w.w}</h2><div class="ipa">${w.ipa||""}</div>
-      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="speak" data-say="${esc(w.w)}">🔊 ฟัง</button><button class="speak slow" onclick="speak('${w.w.replace(/'/g,"\\'")}',0.6)">🐢 ช้า</button></div>
-      ${showBack?`<div class="back"><p class="meaning">${w.th}</p>${exHtml(w)}${s.type==="new"?`<p class="stat" style="text-align:center;margin:12px 0 0">💡 ลองพูดตามประโยคตัวอย่างออกเสียง 1 รอบ แล้วนึกประโยคของตัวเอง 1 ประโยค</p>`:""}</div>`:""}</div>
-      <div class="actions">${s.type==="review"?(run.flipped?`<button class="btn again" onclick="runGrade(false)">ยังไม่ได้</button><button class="btn good" onclick="runGrade(true)">จำได้</button>`:`<button class="btn primary" onclick="run.flipped=true;renderRun()">พลิกดูความหมาย</button>`):`<button class="btn primary" onclick="run.i++;run.flipped=false;renderRun()">คำถัดไป</button>`}</div>`;
-    if(s.type==="new")setTimeout(()=>speak(w.w),200);
+
+function runSession(key){
+  const s=(key==="relearn")
+    ? {key:"relearn",type:"relearn",n:10,name:"ทวนคำที่ยังไม่แม่น",note:""}
+    : sessions().find(x=>x.key===key);
+  if(!s)return;
+  const words=pickWords(s);
+  if(!words.length)return toast(
+    s.type==="new"?"คำใหม่หมดคลังแล้ว — เพิ่มคำในหน้า 'คลังคำศัพท์'"
+    :s.type==="relearn"?"ไม่มีคำค้างให้ทวน เยี่ยมมาก 🎉"
+    :"ยังไม่มีคำสำหรับช่วงนี้ — เริ่มจากช่วง 'คำใหม่' ก่อน");
+  goPage("today");
+  run={s,words,total:words.length,queue:words.slice(),
+       mastered:new Set(),firstOk:new Set(),parked:new Set(),tries:{},
+       flipped:false,relearn:null,phase:(s.type==="new")?"learn":"drill",learnIdx:0};
+  $("#runner").hidden=false;$("#timeline").hidden=true;$("#t-editor").hidden=true;
+  renderRun();$("#runner").scrollIntoView({behavior:"smooth"});
+}
+
+function quitRun(){if(confirm("ออกโดยยังไม่นับว่าทำแล้ว?")){run=null;$("#runner").hidden=true;$("#timeline").hidden=false;}}
+
+function endRun(){
+  const d=dayRec();d.done[run.s.key]=true;
+  if(run.s.type==="test")d.testScore=run.firstOk.size/run.total;
+  saveDays();run=null;
+  $("#runner").hidden=true;$("#timeline").hidden=false;renderToday();syncScheduleToSW();
+}
+
+/* ตัวกลางรับคำตอบทุกโหมด */
+function answer(ok){
+  const w=run.queue[0];if(!w)return;
+  const id=w.id;
+  run.tries[id]=(run.tries[id]||0)+1;
+  if(ok){
+    if(run.tries[id]===1)run.firstOk.add(id);
+    run.mastered.add(id);run.queue.shift();
+    if(run.s.type!=="test")markGrade(id,true);
+    run.flipped=false;run.relearn=null;renderRun();
+  }else{
+    markWrong(id);
+    run.relearn=w;          // แสดงการ์ดทวนพร้อมเฉลยก่อน
+    renderRun();
   }
+}
+
+/* กด "ทวนอีกรอบ" บนการ์ดเฉลย → ดันคำกลับเข้าคิว */
+function requeue(){
+  const w=run.queue.shift();if(!w)return;
+  run.relearn=null;run.flipped=false;
+  if((run.tries[w.id]||0)>=MAX_TRIES) run.parked.add(w.id);   // พักไว้ เดี๋ยวไปเจอในช่วงทวน
+  else run.queue.splice(Math.min(REQUEUE_GAP,run.queue.length),0,w);
+  renderRun();
+}
+
+function runHead(){
+  const s=run.s,doneN=run.mastered.size+run.parked.size;
+  const sub=run.phase==="learn"
+    ? `ดูคำใหม่ ${run.learnIdx+1}/${run.total}`
+    : `จำได้ ${run.mastered.size}/${run.total}` + (run.queue.length?` · เหลือ ${run.queue.length}`:"");
+  const pct=run.phase==="learn" ? run.learnIdx/run.total*100 : (run.total?doneN/run.total*100:0);
+  return `<div class="toolbar" style="justify-content:space-between"><b>${s.name} · ${TYPES[s.type]||"ทวนซ้ำ"}</b>
+    <span class="stat">${sub}</span><button class="btn" onclick="quitRun()">ออก</button></div>
+    <div class="progress"><i style="width:${pct}%"></i></div>`;
+}
+
+/* การ์ดคำศัพท์เต็ม (ใช้ทั้งตอนเรียนใหม่และตอนทวนหลังตอบผิด) */
+function fullCard(w,extra){
+  return `<div class="card"><div class="pos">${w.pos||""}</div><h2 class="big word-en">${w.w}</h2><div class="ipa">${w.ipa||""}</div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="speak" data-say="${esc(w.w)}">🔊 ฟัง</button><button class="speak slow" onclick="speak('${w.w.replace(/'/g,"\\'")}',0.6)">🐢 ช้า</button></div>
+    <div class="back"><p class="meaning">${w.th}</p>${exHtml(w)}${extra||""}</div></div>`;
+}
+
+function choiceBlock(w,label){
+  const others=shuffle(allWords().filter(x=>x.id!==w.id)).slice(0,3);
+  const choices=shuffle([w,...others]);
+  return `<div class="choices">${choices.map(c=>`<button data-id="${c.id}">${label(c)}</button>`).join("")}</div>`;
+}
+function bindChoices(w){
+  let lock=false;
+  $("#runner").querySelectorAll(".choices button").forEach(b=>b.onclick=()=>{
+    if(lock)return;lock=true;
+    const right=b.dataset.id===w.id;
+    b.classList.add(right?"correct":"wrong");
+    $("#runner").querySelector(`.choices [data-id="${w.id}"]`).classList.add("correct");
+    speak(w.w);
+    setTimeout(()=>answer(right),right?500:700);
+  });
+}
+
+function renderRun(){
+  const R=$("#runner"),s=run.s;
+
+  /* ===== เฟสเรียนคำใหม่: ดูความหมาย + ฟังเสียง ก่อนเช็คความจำ ===== */
+  if(run.phase==="learn"){
+    const w=run.words[run.learnIdx];
+    R.innerHTML=runHead()+fullCard(w,`<p class="stat" style="text-align:center;margin:12px 0 0">💡 พูดตามประโยคตัวอย่าง 1 รอบ แล้วนึกประโยคของตัวเอง 1 ประโยค</p>`)+
+      `<div class="actions"><button class="btn primary" onclick="nextLearn()">${run.learnIdx+1>=run.total?"เช็คความจำเลย →":"คำถัดไป"}</button></div>`;
+    setTimeout(()=>speak(w.w),200);
+    return;
+  }
+
+  /* ===== การ์ดทวนหลังตอบผิด ===== */
+  if(run.relearn){
+    const w=run.relearn,t=run.tries[w.id]||1,parking=t>=MAX_TRIES;
+    R.innerHTML=runHead()+
+      `<div class="feedback bad" style="text-align:center">❌ ยังไม่ได้ — ดูเฉลยแล้วทวนอีกรอบ (ผิดครั้งที่ ${t})</div>`+
+      fullCard(w,`<p class="stat" style="text-align:center;margin:12px 0 0">🔊 กดฟังแล้วพูดตาม 2 รอบ ก่อนกดปุ่มด้านล่าง</p>`)+
+      `<div class="actions"><button class="btn primary" onclick="requeue()">${parking?"เก็บไว้ทวนช่วงหน้า →":"เข้าใจแล้ว · ทวนอีกรอบ"}</button></div>`;
+    setTimeout(()=>speak(w.w),200);
+    return;
+  }
+
+  /* ===== จบรอบ ===== */
+  if(!run.queue.length){
+    const pct=Math.round(run.firstOk.size/run.total*100);
+    const parkList=[...run.parked].map(id=>allWords().find(w=>w.id===id)).filter(Boolean);
+    let body;
+    if(s.type==="test"){
+      body=`<div class="score-big">${pct}%</div><p class="center">ตอบถูกครั้งแรก ${run.firstOk.size}/${run.total} คำ ${pct>=80?"✅ ผ่าน":"🔁 ยังไม่ถึง 80%"}</p>`;
+    }else{
+      body=`<div class="empty">จำได้แล้ว ${run.mastered.size}/${run.total} คำ 👍<br><span class="stat">ตอบถูกตั้งแต่ครั้งแรก ${run.firstOk.size} คำ</span></div>`;
+    }
+    const parkBox=parkList.length?`<div class="card"><h3 style="margin-top:0">🔁 คำที่ยังไม่แม่น (${parkList.length})</h3>
+      <p class="stat" style="margin-top:0">ผิดหลายรอบ เก็บไว้ทวนช่วงถัดไป กดฟังทวนได้เลย</p>
+      <ul class="wrong">${parkList.map(w=>`<li><div><span class="word-en">${w.w}</span> <span class="m">${w.th}</span></div><button class="icon" data-say="${esc(w.w)}">🔊</button></li>`).join("")}</ul></div>`:"";
+    R.innerHTML=runHead()+`<div class="card">${body}</div>`+parkBox+
+      `<div class="actions"><button class="btn primary" onclick="endRun()">บันทึกและกลับหน้าวันนี้</button>
+       ${parkList.length?`<button class="btn again" onclick="endRun();runSession('relearn')">ทวนคำที่ยังไม่แม่นต่อเลย</button>`:""}</div>`;
+    return;
+  }
+
+  const w=run.queue[0],head=runHead();
+
+  /* ===== ทบทวน / ทวนคำที่ยังไม่แม่น: พลิกการ์ดแล้วตัดสินใจเอง ===== */
+  if(s.type==="review"||s.type==="relearn"){
+    R.innerHTML=head+(run.flipped
+      ? fullCard(w)
+      : `<div class="card"><div class="pos">${w.pos||""}</div><h2 class="big word-en">${w.w}</h2><div class="ipa">${w.ipa||""}</div>
+         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="speak" data-say="${esc(w.w)}">🔊 ฟัง</button><button class="speak slow" onclick="speak('${w.w.replace(/'/g,"\\'")}',0.6)">🐢 ช้า</button></div></div>`)
+      +`<div class="actions">${run.flipped
+        ? `<button class="btn again" onclick="answer(false)">ยังไม่ได้</button><button class="btn good" onclick="answer(true)">จำได้</button>`
+        : `<button class="btn primary" onclick="run.flipped=true;renderRun()">พลิกดูความหมาย</button>`}</div>`;
+    return;
+  }
+
+  /* ===== ทวนคำวันนี้ / เช็คความจำคำใหม่: อังกฤษ → เลือกความหมาย ===== */
+  if(s.type==="recap"||s.type==="new"){
+    R.innerHTML=head+`<div class="q"><p class="stat center" style="margin:0">คำนี้แปลว่าอะไร</p>
+      <p class="prompt word-en">${w.w}</p><p class="stat center">${w.ipa||""}</p>
+      ${choiceBlock(w,x=>x.th)}</div>`;
+    bindChoices(w);
+    return;
+  }
+
+  /* ===== ฝึกใช้ในประโยค: พิมพ์คำเอง ===== */
   if(s.type==="usage"){
     const e=w.ex[Math.floor(Math.random()*w.ex.length)];
-    R.innerHTML=head+`<div class="q"><p class="stat" style="text-align:center;margin:0">เติมคำให้ถูก (ความหมาย: <b>${w.th}</b>)</p><p class="prompt word-en" style="font-size:24px">${blankOut(e[0],w.w)}</p><p class="stat" style="text-align:center">${e[1]||""}</p>
-      <div style="text-align:center"><input class="typein" id="u-in" autocomplete="off" autocapitalize="off" placeholder="พิมพ์คำศัพท์"><div class="feedback" id="u-fb"></div><button class="btn primary" id="u-chk">ตรวจ</button> <button class="btn" onclick="speak('${e[0].replace(/'/g,"\\'")}')">🔊 ฟังประโยค</button></div></div>`;
-    const inp=$("#u-in");inp.focus();const chk=()=>{const v=inp.value.trim().toLowerCase(),a=w.w.toLowerCase();const good=v===a||sim(v,a)>=0.85;
-      $("#u-fb").innerHTML=good?`✅ <span class="word-en">${e[0]}</span>`:`❌ คำตอบคือ <span class="word-en">${w.w}</span>`;speak(e[0]);if(good)run.ok++;else markWrong(w.id);
-      $("#u-chk").textContent="ข้อถัดไป";$("#u-chk").onclick=()=>{run.i++;renderRun();};};
-    $("#u-chk").onclick=chk;inp.onkeydown=ev=>{if(ev.key==="Enter")$("#u-chk").click();};
+    R.innerHTML=head+`<div class="q"><p class="stat center" style="margin:0">เติมคำให้ถูก (ความหมาย: <b>${w.th}</b>)</p>
+      <p class="prompt word-en" style="font-size:24px">${blankOut(e[0],w.w)}</p><p class="stat center">${e[1]||""}</p>
+      <div class="center"><input class="typein" id="u-in" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="พิมพ์คำศัพท์">
+      <div class="feedback" id="u-fb"></div>
+      <button class="btn primary" id="u-chk">ตรวจ</button>
+      <button class="btn" onclick="speak('${e[0].replace(/'/g,"\\'")}')">🔊 ฟังประโยค</button>
+      <button class="btn" onclick="answer(false)">ยังไม่รู้ ขอดูเฉลย</button></div></div>`;
+    const inp=$("#u-in");inp.focus();
+    $("#u-chk").onclick=()=>{
+      const v=inp.value.trim().toLowerCase(),a=w.w.toLowerCase();
+      const good=v===a||sim(v,a)>=0.85;
+      if(good){$("#u-fb").innerHTML=`✅ <span class="word-en">${e[0]}</span>`;$("#u-fb").className="feedback ok";speak(e[0]);$("#u-chk").disabled=true;setTimeout(()=>answer(true),700);}
+      else answer(false);
+    };
+    inp.onkeydown=ev=>{if(ev.key==="Enter")$("#u-chk").click();};
+    return;
   }
+
+  /* ===== มินิเทสต์: สลับ 4 รูปแบบ ===== */
   if(s.type==="test"){
-    const kinds=["en2th","th2en","listen","fill"];const type=kinds[i%kinds.length];
-    const others=shuffle(allWords().filter(x=>x.id!==w.id)).slice(0,3);const choices=shuffle([w,...others]);let prompt="",label=x=>x.th;
-    if(type==="en2th")prompt=`<p class="prompt word-en">${w.w}</p>`;
-    if(type==="th2en"){prompt=`<p class="prompt">${w.th}</p>`;label=x=>x.w;}
-    if(type==="listen"){prompt=`<div style="text-align:center"><button class="speak" data-say="${esc(w.w)}">🔊 ฟังคำ</button></div>`;label=x=>x.w;setTimeout(()=>speak(w.w),300);}
-    if(type==="fill"){const e=(w.ex||[["",""]])[0];prompt=`<p class="prompt word-en" style="font-size:24px">${blankOut(e[0],w.w)}</p><p class="stat" style="text-align:center">${e[1]||""}</p>`;label=x=>x.w;}
-    R.innerHTML=head+`<div class="q">${prompt}<div class="choices">${choices.map(c=>`<button data-id="${c.id}">${label(c)}</button>`).join("")}</div><div class="feedback" id="r-fb"></div><div class="actions"><button class="btn" id="r-next" disabled>ข้อถัดไป</button></div></div>`;
-    let lock=false;R.querySelectorAll(".choices button").forEach(b=>b.onclick=()=>{if(lock)return;lock=true;const right=b.dataset.id===w.id;if(right)run.ok++;else markWrong(w.id);
-      b.classList.add(right?"correct":"wrong");R.querySelector(`.choices [data-id="${w.id}"]`).classList.add("correct");$("#r-fb").innerHTML=right?"✅ ถูกต้อง":`❌ <span class="word-en">${w.w}</span> = ${w.th}`;if(type!=="listen")speak(w.w);$("#r-next").disabled=false;$("#r-next").focus();});
-    $("#r-next").onclick=()=>{run.i++;renderRun();};
+    const kinds=["en2th","th2en","listen","fill"];
+    const kind=kinds[(run.total-run.queue.length+(run.tries[w.id]||0))%4];
+    let prompt="",label=x=>x.th;
+    if(kind==="en2th")prompt=`<p class="prompt word-en">${w.w}</p><p class="stat center">${w.ipa||""}</p>`;
+    if(kind==="th2en"){prompt=`<p class="prompt">${w.th}</p>`;label=x=>x.w;}
+    if(kind==="listen"){prompt=`<div class="center"><button class="speak" data-say="${esc(w.w)}">🔊 ฟังคำ</button></div>`;label=x=>x.w;setTimeout(()=>speak(w.w),300);}
+    if(kind==="fill"){const e=(w.ex||[["",""]])[0];prompt=`<p class="prompt word-en" style="font-size:24px">${blankOut(e[0],w.w)}</p><p class="stat center">${e[1]||""}</p>`;label=x=>x.w;}
+    R.innerHTML=head+`<div class="q">${prompt}${choiceBlock(w,label)}</div>`;
+    bindChoices(w);
+    return;
   }
 }
-function runGrade(ok){const w=run.words[run.i];markGrade(w.id,ok);if(ok)run.ok++;run.i++;run.flipped=false;renderRun();}
+
+function nextLearn(){
+  run.learnIdx++;
+  if(run.learnIdx>=run.total){run.phase="drill";run.queue=shuffle(run.words.slice());toast("ทีนี้มาเช็คว่าจำได้ไหม — ตอบผิดจะวนกลับมาถามใหม่");}
+  renderRun();
+}
 
 /* ---------- STATS ---------- */
 let calCursor=new Date();

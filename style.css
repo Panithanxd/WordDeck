@@ -166,3 +166,17 @@ header .hdr-actions{display:flex;gap:6px;align-items:center}
   .timeline:before{left:6px}
   .sess:before{left:-17px}
 }
+
+/* ===== ระบบทวนซ้ำ ===== */
+.counts b.warn{color:var(--coral)}
+.feedback.ok{color:var(--sea)}
+.feedback.bad{color:var(--coral)}
+.center{text-align:center}
+.score-big{font-size:56px;font-weight:700;text-align:center;font-family:"Lora",serif;color:var(--sea);line-height:1.1}
+.wrong{list-style:none;margin:0;padding:0}
+.wrong li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.wrong li:last-child{border-bottom:0}
+.wrong .word-en{font-weight:700}
+.wrong .m{color:var(--muted);font-size:14px}
+.typein:focus{border-color:var(--sea)}
+#u-in{margin-bottom:8px}
