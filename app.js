@@ -2,7 +2,7 @@
  * ต่อยอดจาก vocab-trainer.html เดิม: โครงสร้าง/ชื่อฟังก์ชัน/คีย์ localStorage คงเดิม
  * เพิ่ม: โหลดคำจาก data/words.json, PWA (SW + install), แจ้งเตือนผ่าน SW, .ics, หน้าสถิติ, ธีม
  */
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.3.0";
 const $=s=>document.querySelector(s); // ต้องประกาศก่อนทุกส่วน (เดิมอยู่ใต้ loadVoices ทำให้เกิด TDZ error)
 
 /* ---------- DATA (โหลดจาก data/words.json) ---------- */
@@ -191,7 +191,10 @@ function renderToday(){
   const done=ss.filter(x=>d.done[x.key]).length;
   const shaky=shakyWords().length;
   $("#t-counts").innerHTML=`<div><b>${d.newWords.length}</b><span>คำใหม่วันนี้</span></div><div><b>${dueWords().length}</b><span>รอทบทวน</span></div><div><b class="${shaky?"warn":""}">${shaky}</b><span>ยังไม่แม่น</span></div><div><b>${d.testScore==null?"–":Math.round(d.testScore*100)+"%"}</b><span>คะแนนเทสต์</span></div>`;
-  const rb=$("#t-relearn");rb.hidden=!shaky;rb.textContent=`🔁 ทวนคำที่ยังไม่แม่น (${shaky})`;
+  const rw=relearnWords().length;
+  const rb=$("#t-relearn");rb.hidden=!rw;
+  rb.textContent=`🔁 ทวนซ้ำทั้งหมด (${rw})`;
+  rb.title=shaky?`รวมคำที่ยังไม่แม่น ${shaky} คำ ไว้ต้นคิว`:"ทวนคำของวันนี้ทั้งหมดอีกรอบ";
   $("#t-start").disabled=!next;$("#t-start").textContent=next?`▶ เริ่ม: ${next.name}`:"ครบแล้ว";
   $("#timeline").innerHTML=ss.map(x=>{const isDone=d.done[x.key],isNow=!isDone&&x===next&&nm>=toMin(x.t)-15;
     return `<div class="sess ${isDone?"done":""} ${isNow?"now":""}"><div class="t">${x.t}</div><div class="n">${x.name}<small>${TYPES[x.type]}${x.n?` ${x.n} คำ`:""} · ${x.note||""}</small></div>
@@ -309,6 +312,18 @@ const ROUND_LABEL=["อังกฤษ → ความหมาย","ควา�
 const shakyWords=()=>allWords().filter(w=>prog[w.id]&&getP(w.id).box===0)
   .sort((a,b)=>(getP(b.id).wrong||0)-(getP(a.id).wrong||0));
 
+/* คำสำหรับช่วงทวนซ้ำ: ทวน "ทั้งหมด" ของวันนี้ ไม่ใช่เฉพาะคำที่ตอบผิด
+   เรียงคำที่ยังไม่แม่นขึ้นก่อน แล้วตามด้วยคำที่เหลือของวันนี้ (ตอบถูกแล้วก็ยังต้องเจอ) */
+function relearnWords(){
+  const seen=new Set(),out=[];
+  const push=w=>{if(w&&!seen.has(w.id)){seen.add(w.id);out.push(w);}};
+  const today=todayWords();
+  shakyWords().forEach(push);            // ยังไม่แม่น มาก่อน
+  today.forEach(push);                   // คำของวันนี้ทั้งหมด รวมคำที่ตอบถูกแล้ว
+  if(out.length<4)dueWords().forEach(push);  // วันแรกที่ยังมีคำน้อย ดึงคำที่ถึงกำหนดมาเสริม
+  return out;
+}
+
 function pickWords(s){
   const d=dayRec();
   if(s.type==="new"){const ws=pickNew(s.n);ws.forEach(w=>{if(!d.newWords.includes(w.id))d.newWords.push(w.id);if(!prog[w.id])prog[w.id]={box:0,due:0,wrong:0};});save(KEY_PROG,prog);saveDays();return ws;}
@@ -316,13 +331,13 @@ function pickWords(s){
   if(s.type==="usage"){let ws=shuffle([...todayWords(),...dueWords()].filter(w=>w.ex&&w.ex.length)).slice(0,s.n||5);if(!ws.length)ws=shuffle(allWords().filter(w=>prog[w.id]&&w.ex&&w.ex.length)).slice(0,s.n||5);return ws;}
   if(s.type==="test"){let ws=shuffle([...todayWords(),...dueWords()]);if(ws.length<4)ws=shuffle(allWords()).slice(0,s.n||10);return ws.slice(0,s.n||10);}
   if(s.type==="recap")return shuffle(todayWords());
-  if(s.type==="relearn")return shakyWords().slice(0,s.n||10);
+  if(s.type==="relearn")return relearnWords().slice(0,s.n||20);
   return [];
 }
 
 function runSession(key){
   const s=(key==="relearn")
-    ? {key:"relearn",type:"relearn",n:10,name:"ทวนคำที่ยังไม่แม่น",note:""}
+    ? {key:"relearn",type:"relearn",n:20,name:"ทวนซ้ำทั้งหมด",note:""}
     : sessions().find(x=>x.key===key);
   if(!s)return;
   const words=pickWords(s);
@@ -464,7 +479,7 @@ function renderRun(){
       <ul class="wrong">${parkList.map(w=>`<li><div><span class="word-en">${w.w}</span> <span class="m">${w.th}</span></div><button class="icon" data-say="${esc(w.w)}">🔊</button></li>`).join("")}</ul></div>`:"";
     R.innerHTML=runHead()+`<div class="card" style="min-height:auto">${body}</div>`+parkBox+
       `<div class="actions"><button class="btn primary" onclick="endRun()">บันทึกและกลับหน้าวันนี้</button>
-       ${parkList.length?`<button class="btn again" onclick="endRun();runSession('relearn')">ทวนคำที่ยังไม่แม่นต่อเลย</button>`:""}</div>`;
+       <button class="btn again" onclick="endRun();runSession('relearn')">🔁 ทวนซ้ำทั้งหมดอีกรอบ</button></div>`;
     return;
   }
 
