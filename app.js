@@ -2,7 +2,7 @@
  * ต่อยอดจาก vocab-trainer.html เดิม: โครงสร้าง/ชื่อฟังก์ชัน/คีย์ localStorage คงเดิม
  * เพิ่ม: โหลดคำจาก data/words.json, PWA (SW + install), แจ้งเตือนผ่าน SW, .ics, หน้าสถิติ, ธีม
  */
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const $=s=>document.querySelector(s); // ต้องประกาศก่อนทุกส่วน (เดิมอยู่ใต้ loadVoices ทำให้เกิด TDZ error)
 
 /* ---------- DATA (โหลดจาก data/words.json) ---------- */
