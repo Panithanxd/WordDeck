@@ -180,3 +180,9 @@ header .hdr-actions{display:flex;gap:6px;align-items:center}
 .wrong .m{color:var(--muted);font-size:14px}
 .typein:focus{border-color:var(--sea)}
 #u-in{margin-bottom:8px}
+
+/* ===== ตั้งค่าจำนวนรอบทวน ===== */
+.rounds-set{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:6px}
+.rounds-set .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:8px;background:var(--paper)}
+.rounds-set .seg button{background:transparent;border:0;padding:8px 18px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer}
+.rounds-set .seg button.on{background:var(--sea);color:#fff}

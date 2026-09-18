@@ -2,7 +2,7 @@
  * ต่อยอดจาก vocab-trainer.html เดิม: โครงสร้าง/ชื่อฟังก์ชัน/คีย์ localStorage คงเดิม
  * เพิ่ม: โหลดคำจาก data/words.json, PWA (SW + install), แจ้งเตือนผ่าน SW, .ics, หน้าสถิติ, ธีม
  */
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 const $=s=>document.querySelector(s); // ต้องประกาศก่อนทุกส่วน (เดิมอยู่ใต้ loadVoices ทำให้เกิด TDZ error)
 
 /* ---------- DATA (โหลดจาก data/words.json) ---------- */
@@ -204,7 +204,11 @@ $("#t-extra").onclick=()=>{const d=dayRec();const h=new Date();const t=`${String
 
 /* editor */
 $("#t-edit").onclick=()=>{const e=$("#t-editor");e.hidden=!e.hidden;if(!e.hidden)renderEditor();};
-function renderEditor(){$("#t-editor").innerHTML=`<p class="stat" style="margin-top:0">ตั้งเวลาให้ตรงกับวันของคุณ (ตื่น 06:00 · ทำงาน 07:00–19:00) — เพิ่ม/ลบช่วงได้ แล้วกด "ดาวน์โหลด .ics" ใหม่ถ้าใช้ Google Calendar</p>`+
+function renderEditor(){$("#t-editor").innerHTML=
+  `<div class="rounds-set"><b>ต้องทวนกี่รอบถึงจะผ่าน</b>
+    <div class="seg">${[1,2,3].map(n=>`<button class="${getRounds()===n?"on":""}" onclick="save('${KEY_ROUNDS}',${n});renderEditor();toast('ตั้งเป็น ${n} รอบแล้ว ใช้กับช่วงที่เริ่มหลังจากนี้')">${n} รอบ</button>`).join("")}</div>
+    <p class="stat" style="margin:6px 0 0">ตอบถูกรอบแรกยังไม่ผ่าน ต้องเจอคำเดิมอีกในรอบถัดไปโดยถามคนละแบบ — รอบ 1 อังกฤษ→ความหมาย · รอบ 2 ความหมาย→อังกฤษ · รอบ 3 ฟังเสียง→เลือกคำ</p></div>`+
+  `<p class="stat" style="margin-top:14px">ตั้งเวลาให้ตรงกับวันของคุณ (ตื่น 06:00 · ทำงาน 07:00–19:00) — เพิ่ม/ลบช่วงได้ แล้วกด "ดาวน์โหลด .ics" ใหม่ถ้าใช้ Google Calendar</p>`+
   sched.map((x,i)=>`<div class="row"><input type="time" value="${x.t}" onchange="sched[${i}].t=this.value;saveSched()"><input type="text" value="${esc(x.name)}" onchange="sched[${i}].name=this.value;saveSched()"><select onchange="sched[${i}].type=this.value;saveSched()">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${x.type===k?"selected":""}>${v}</option>`).join("")}</select><button class="icon" onclick="sched.splice(${i},1);saveSched();renderEditor()">🗑</button>
   <div></div><div class="stat">จำนวนคำ <input type="number" min="0" max="30" value="${x.n}" style="width:70px" onchange="sched[${i}].n=+this.value;saveSched()"></div><div></div><div></div></div>`).join("")+
   `<button class="btn" onclick="sched.push({t:'12:00',type:'review',n:8,name:'ช่วงใหม่',note:''});saveSched();renderEditor()">+ เพิ่มช่วง</button> <button class="btn" onclick="sched=JSON.parse(JSON.stringify(DEFAULT_SCHED));saveSched();renderEditor()">คืนค่าเริ่มต้น</button>`;}
@@ -291,10 +295,15 @@ function buildICS(){
 $("#t-ics").onclick=()=>{const blob=new Blob([buildICS()],{type:"text/calendar;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="worddeck-schedule.ics";a.click();
   toast("ดาวน์โหลดแล้ว — เปิดไฟล์ด้วย Google Calendar แล้วเลือก 'นำเข้า' จะได้เตือนทุกวัน");};
 
-/* ---------- session runner (มีระบบทวนซ้ำในตัว) ---------- */
+/* ---------- session runner (ทวนซ้ำหลายรอบ — ตอบถูกครั้งเดียวยังไม่ผ่าน) ---------- */
 let run=null;
-const MAX_TRIES=3;    // ผิดเกินนี้ พักไว้ก่อน แล้วไปโผล่ในช่วง "ทวนคำที่ยังไม่แม่น"
-const REQUEUE_GAP=3;  // ผิดแล้ววนกลับมาถามใหม่หลังผ่านไปกี่คำ
+const MAX_TRIES=3;        // ผิดซ้ำเกินนี้ในรอบเดียว → พักไว้ ไปโผล่ในช่วง "ทวนคำที่ยังไม่แม่น"
+const REQUEUE_GAP=3;      // ตอบผิดแล้ววนกลับมาถามใหม่หลังผ่านไปกี่คำ
+const KEY_ROUNDS="wd_rounds";
+const getRounds=()=>Math.min(3,Math.max(1,+load(KEY_ROUNDS,2)||2));
+
+/* ชื่อรูปแบบคำถามของแต่ละรอบ */
+const ROUND_LABEL=["อังกฤษ → ความหมาย","ความหมาย → อังกฤษ","ฟังเสียง → เลือกคำ"];
 
 /* คำที่ยังไม่แม่น = เคยเรียนแล้วแต่ยังตกอยู่กล่อง 0 (เรียงคำที่ผิดบ่อยขึ้นก่อน) */
 const shakyWords=()=>allWords().filter(w=>prog[w.id]&&getP(w.id).box===0)
@@ -322,8 +331,9 @@ function runSession(key){
     :s.type==="relearn"?"ไม่มีคำค้างให้ทวน เยี่ยมมาก 🎉"
     :"ยังไม่มีคำสำหรับช่วงนี้ — เริ่มจากช่วง 'คำใหม่' ก่อน");
   goPage("today");
-  run={s,words,total:words.length,queue:words.slice(),
-       mastered:new Set(),firstOk:new Set(),parked:new Set(),tries:{},
+  run={s,words,total:words.length,rounds:getRounds(),round:1,
+       queue:words.slice(),doneRound:new Set(),passed:new Set(),
+       firstOk:new Set(),parked:new Set(),tries:{},
        flipped:false,relearn:null,phase:(s.type==="new")?"learn":"drill",learnIdx:0};
   $("#runner").hidden=false;$("#timeline").hidden=true;$("#t-editor").hidden=true;
   renderRun();$("#runner").scrollIntoView({behavior:"smooth"});
@@ -344,38 +354,58 @@ function answer(ok){
   const id=w.id;
   run.tries[id]=(run.tries[id]||0)+1;
   if(ok){
-    if(run.tries[id]===1)run.firstOk.add(id);
-    run.mastered.add(id);run.queue.shift();
-    if(run.s.type!=="test")markGrade(id,true);
-    run.flipped=false;run.relearn=null;renderRun();
+    if(run.round===1&&run.tries[id]===1)run.firstOk.add(id);
+    run.doneRound.add(id);run.queue.shift();
+    run.tries[id]=0;                       // เริ่มนับใหม่ในรอบถัดไป
+    if(run.round>=run.rounds){run.passed.add(id);if(run.s.type!=="test")markGrade(id,true);}
+    run.flipped=false;run.relearn=null;
+    if(!run.queue.length)nextRound();else renderRun();
   }else{
     markWrong(id);
-    run.relearn=w;          // แสดงการ์ดทวนพร้อมเฉลยก่อน
+    run.relearn=w;                         // แสดงการ์ดเฉลยก่อน
     renderRun();
   }
 }
 
-/* กด "ทวนอีกรอบ" บนการ์ดเฉลย → ดันคำกลับเข้าคิว */
+/* กด "ทวนอีกรอบ" บนการ์ดเฉลย → ดันคำกลับเข้าคิวของรอบนี้ */
 function requeue(){
   const w=run.queue.shift();if(!w)return;
   run.relearn=null;run.flipped=false;
-  if((run.tries[w.id]||0)>=MAX_TRIES) run.parked.add(w.id);   // พักไว้ เดี๋ยวไปเจอในช่วงทวน
+  if((run.tries[w.id]||0)>=MAX_TRIES) run.parked.add(w.id);
   else run.queue.splice(Math.min(REQUEUE_GAP,run.queue.length),0,w);
-  renderRun();
+  if(!run.queue.length)nextRound();else renderRun();
+}
+
+/* จบรอบหนึ่ง → ขึ้นรอบถัดไปด้วยรูปแบบคำถามใหม่ */
+function nextRound(){
+  if(run.round<run.rounds){
+    run.round++;
+    run.doneRound=new Set();
+    run.tries={};
+    run.queue=shuffle(run.words.filter(w=>!run.parked.has(w.id)));
+    if(run.queue.length){
+      toast(`รอบที่ ${run.round}/${run.rounds} — ${ROUND_LABEL[run.round-1]||"ทวนอีกครั้ง"} ตอบถูกรอบแรกก็ยังต้องเจออีก`);
+      renderRun();return;
+    }
+  }
+  renderRun();   // ไม่เหลือคำ → หน้าสรุป
 }
 
 function runHead(){
-  const s=run.s,doneN=run.mastered.size+run.parked.size;
+  const s=run.s;
   const sub=run.phase==="learn"
     ? `ดูคำใหม่ ${run.learnIdx+1}/${run.total}`
-    : `จำได้ ${run.mastered.size}/${run.total}` + (run.queue.length?` · เหลือ ${run.queue.length}`:"");
-  const pct=run.phase==="learn" ? run.learnIdx/run.total*100 : (run.total?doneN/run.total*100:0);
+    : `รอบ ${run.round}/${run.rounds} · ผ่าน ${run.doneRound.size}/${run.total-run.parked.size}`;
+  const pct=run.phase==="learn"
+    ? run.learnIdx/run.total*100
+    : ((run.round-1)*run.total+run.doneRound.size+run.parked.size)/(run.rounds*run.total)*100;
   return `<div class="toolbar" style="justify-content:space-between"><b>${s.name} · ${TYPES[s.type]||"ทวนซ้ำ"}</b>
     <span class="stat">${sub}</span><button class="btn" onclick="quitRun()">ออก</button></div>
-    <div class="progress"><i style="width:${pct}%"></i></div>`;
+    <div class="progress"><i style="width:${pct}%"></i></div>
+    ${run.phase!=="learn"?`<p class="stat center" style="margin:-6px 0 12px">${ROUND_LABEL[run.round-1]||""}</p>`:""}`;
 }
 
-/* การ์ดคำศัพท์เต็ม (ใช้ทั้งตอนเรียนใหม่และตอนทวนหลังตอบผิด) */
+/* การ์ดคำศัพท์เต็ม (ใช้ตอนเรียนใหม่และตอนทวนหลังตอบผิด) */
 function fullCard(w,extra){
   return `<div class="card"><div class="pos">${w.pos||""}</div><h2 class="big word-en">${w.w}</h2><div class="ipa">${w.ipa||""}</div>
     <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="speak" data-say="${esc(w.w)}">🔊 ฟัง</button><button class="speak slow" onclick="speak('${w.w.replace(/'/g,"\\'")}',0.6)">🐢 ช้า</button></div>
@@ -384,8 +414,7 @@ function fullCard(w,extra){
 
 function choiceBlock(w,label){
   const others=shuffle(allWords().filter(x=>x.id!==w.id)).slice(0,3);
-  const choices=shuffle([w,...others]);
-  return `<div class="choices">${choices.map(c=>`<button data-id="${c.id}">${label(c)}</button>`).join("")}</div>`;
+  return `<div class="choices">${shuffle([w,...others]).map(c=>`<button data-id="${c.id}">${label(c)}</button>`).join("")}</div>`;
 }
 function bindChoices(w){
   let lock=false;
@@ -395,78 +424,88 @@ function bindChoices(w){
     b.classList.add(right?"correct":"wrong");
     $("#runner").querySelector(`.choices [data-id="${w.id}"]`).classList.add("correct");
     speak(w.w);
-    setTimeout(()=>answer(right),right?500:700);
+    setTimeout(()=>answer(right),right?550:750);
   });
 }
 
 function renderRun(){
   const R=$("#runner"),s=run.s;
 
-  /* ===== เฟสเรียนคำใหม่: ดูความหมาย + ฟังเสียง ก่อนเช็คความจำ ===== */
+  /* ===== เฟสเรียนคำใหม่ ===== */
   if(run.phase==="learn"){
     const w=run.words[run.learnIdx];
-    R.innerHTML=runHead()+fullCard(w,`<p class="stat" style="text-align:center;margin:12px 0 0">💡 พูดตามประโยคตัวอย่าง 1 รอบ แล้วนึกประโยคของตัวเอง 1 ประโยค</p>`)+
+    R.innerHTML=runHead()+fullCard(w,`<p class="stat center" style="margin:12px 0 0">💡 พูดตามประโยคตัวอย่าง 1 รอบ แล้วนึกประโยคของตัวเอง 1 ประโยค</p>`)+
       `<div class="actions"><button class="btn primary" onclick="nextLearn()">${run.learnIdx+1>=run.total?"เช็คความจำเลย →":"คำถัดไป"}</button></div>`;
     setTimeout(()=>speak(w.w),200);
     return;
   }
 
-  /* ===== การ์ดทวนหลังตอบผิด ===== */
+  /* ===== การ์ดเฉลยหลังตอบผิด ===== */
   if(run.relearn){
     const w=run.relearn,t=run.tries[w.id]||1,parking=t>=MAX_TRIES;
     R.innerHTML=runHead()+
-      `<div class="feedback bad" style="text-align:center">❌ ยังไม่ได้ — ดูเฉลยแล้วทวนอีกรอบ (ผิดครั้งที่ ${t})</div>`+
-      fullCard(w,`<p class="stat" style="text-align:center;margin:12px 0 0">🔊 กดฟังแล้วพูดตาม 2 รอบ ก่อนกดปุ่มด้านล่าง</p>`)+
+      `<div class="feedback bad center">❌ ยังไม่ได้ — ดูเฉลยแล้วทวนอีกรอบ (ผิดครั้งที่ ${t})</div>`+
+      fullCard(w,`<p class="stat center" style="margin:12px 0 0">🔊 กดฟังแล้วพูดตาม 2 รอบ ก่อนกดปุ่มด้านล่าง</p>`)+
       `<div class="actions"><button class="btn primary" onclick="requeue()">${parking?"เก็บไว้ทวนช่วงหน้า →":"เข้าใจแล้ว · ทวนอีกรอบ"}</button></div>`;
     setTimeout(()=>speak(w.w),200);
     return;
   }
 
-  /* ===== จบรอบ ===== */
+  /* ===== จบทุกรอบ ===== */
   if(!run.queue.length){
     const pct=Math.round(run.firstOk.size/run.total*100);
     const parkList=[...run.parked].map(id=>allWords().find(w=>w.id===id)).filter(Boolean);
-    let body;
-    if(s.type==="test"){
-      body=`<div class="score-big">${pct}%</div><p class="center">ตอบถูกครั้งแรก ${run.firstOk.size}/${run.total} คำ ${pct>=80?"✅ ผ่าน":"🔁 ยังไม่ถึง 80%"}</p>`;
-    }else{
-      body=`<div class="empty">จำได้แล้ว ${run.mastered.size}/${run.total} คำ 👍<br><span class="stat">ตอบถูกตั้งแต่ครั้งแรก ${run.firstOk.size} คำ</span></div>`;
-    }
-    const parkBox=parkList.length?`<div class="card"><h3 style="margin-top:0">🔁 คำที่ยังไม่แม่น (${parkList.length})</h3>
+    const body=s.type==="test"
+      ? `<div class="score-big">${pct}%</div><p class="center">ตอบถูกตั้งแต่ครั้งแรก ${run.firstOk.size}/${run.total} คำ ${pct>=80?"✅ ผ่าน":"🔁 ยังไม่ถึง 80%"}</p>
+         <p class="stat center">ผ่านครบ ${run.rounds} รอบแล้ว ${run.passed.size}/${run.total} คำ</p>`
+      : `<div class="empty">ผ่านครบ ${run.rounds} รอบแล้ว ${run.passed.size}/${run.total} คำ 👍<br><span class="stat">ตอบถูกตั้งแต่ครั้งแรก ${run.firstOk.size} คำ</span></div>`;
+    const parkBox=parkList.length?`<div class="card" style="min-height:auto;display:block;text-align:left"><h3 style="margin-top:0">🔁 คำที่ยังไม่แม่น (${parkList.length})</h3>
       <p class="stat" style="margin-top:0">ผิดหลายรอบ เก็บไว้ทวนช่วงถัดไป กดฟังทวนได้เลย</p>
       <ul class="wrong">${parkList.map(w=>`<li><div><span class="word-en">${w.w}</span> <span class="m">${w.th}</span></div><button class="icon" data-say="${esc(w.w)}">🔊</button></li>`).join("")}</ul></div>`:"";
-    R.innerHTML=runHead()+`<div class="card">${body}</div>`+parkBox+
+    R.innerHTML=runHead()+`<div class="card" style="min-height:auto">${body}</div>`+parkBox+
       `<div class="actions"><button class="btn primary" onclick="endRun()">บันทึกและกลับหน้าวันนี้</button>
        ${parkList.length?`<button class="btn again" onclick="endRun();runSession('relearn')">ทวนคำที่ยังไม่แม่นต่อเลย</button>`:""}</div>`;
     return;
   }
 
-  const w=run.queue[0],head=runHead();
+  const w=run.queue[0],head=runHead(),r=run.round;
 
-  /* ===== ทบทวน / ทวนคำที่ยังไม่แม่น: พลิกการ์ดแล้วตัดสินใจเอง ===== */
+  /* ===== ทบทวน / ทวนคำที่ยังไม่แม่น: พลิกการ์ด ===== */
   if(s.type==="review"||s.type==="relearn"){
-    R.innerHTML=head+(run.flipped
-      ? fullCard(w)
+    const thFirst=(r===2);   // รอบ 2 กลับด้าน: เห็นความหมายไทย ต้องนึกคำอังกฤษเอง
+    const front=thFirst
+      ? `<div class="card"><p class="stat">คำนี้ภาษาอังกฤษว่าอะไร</p><h2 class="meaning" style="font-size:28px">${w.th}</h2></div>`
       : `<div class="card"><div class="pos">${w.pos||""}</div><h2 class="big word-en">${w.w}</h2><div class="ipa">${w.ipa||""}</div>
-         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="speak" data-say="${esc(w.w)}">🔊 ฟัง</button><button class="speak slow" onclick="speak('${w.w.replace(/'/g,"\\'")}',0.6)">🐢 ช้า</button></div></div>`)
+         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="speak" data-say="${esc(w.w)}">🔊 ฟัง</button><button class="speak slow" onclick="speak('${w.w.replace(/'/g,"\\'")}',0.6)">🐢 ช้า</button></div></div>`;
+    R.innerHTML=head+(run.flipped?fullCard(w):front)
       +`<div class="actions">${run.flipped
         ? `<button class="btn again" onclick="answer(false)">ยังไม่ได้</button><button class="btn good" onclick="answer(true)">จำได้</button>`
-        : `<button class="btn primary" onclick="run.flipped=true;renderRun()">พลิกดูความหมาย</button>`}</div>`;
+        : `<button class="btn primary" onclick="run.flipped=true;renderRun()">${thFirst?"เฉลย":"พลิกดูความหมาย"}</button>`}</div>`;
     return;
   }
 
-  /* ===== ทวนคำวันนี้ / เช็คความจำคำใหม่: อังกฤษ → เลือกความหมาย ===== */
+  /* ===== คำใหม่ / ทวนคำวันนี้: เปลี่ยนรูปแบบตามรอบ ===== */
   if(s.type==="recap"||s.type==="new"){
-    R.innerHTML=head+`<div class="q"><p class="stat center" style="margin:0">คำนี้แปลว่าอะไร</p>
-      <p class="prompt word-en">${w.w}</p><p class="stat center">${w.ipa||""}</p>
-      ${choiceBlock(w,x=>x.th)}</div>`;
+    if(r===1){
+      R.innerHTML=head+`<div class="q"><p class="stat center" style="margin:0">คำนี้แปลว่าอะไร</p>
+        <p class="prompt word-en">${w.w}</p><p class="stat center">${w.ipa||""}</p>
+        ${choiceBlock(w,x=>x.th)}</div>`;
+    }else if(r===2){
+      R.innerHTML=head+`<div class="q"><p class="stat center" style="margin:0">ความหมายนี้ตรงกับคำไหน</p>
+        <p class="prompt">${w.th}</p>${choiceBlock(w,x=>x.w)}</div>`;
+    }else{
+      R.innerHTML=head+`<div class="q"><p class="stat center" style="margin:0">ฟังแล้วเลือกคำที่ได้ยิน</p>
+        <div class="center"><button class="speak" data-say="${esc(w.w)}">🔊 ฟังอีกครั้ง</button></div>
+        ${choiceBlock(w,x=>x.w)}</div>`;
+      setTimeout(()=>speak(w.w),300);
+    }
     bindChoices(w);
     return;
   }
 
-  /* ===== ฝึกใช้ในประโยค: พิมพ์คำเอง ===== */
+  /* ===== ฝึกใช้ในประโยค: รอบ 2 ใช้ประโยคอีกอัน ===== */
   if(s.type==="usage"){
-    const e=w.ex[Math.floor(Math.random()*w.ex.length)];
+    const e=w.ex[(r-1)%w.ex.length];
     R.innerHTML=head+`<div class="q"><p class="stat center" style="margin:0">เติมคำให้ถูก (ความหมาย: <b>${w.th}</b>)</p>
       <p class="prompt word-en" style="font-size:24px">${blankOut(e[0],w.w)}</p><p class="stat center">${e[1]||""}</p>
       <div class="center"><input class="typein" id="u-in" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="พิมพ์คำศัพท์">
@@ -477,8 +516,7 @@ function renderRun(){
     const inp=$("#u-in");inp.focus();
     $("#u-chk").onclick=()=>{
       const v=inp.value.trim().toLowerCase(),a=w.w.toLowerCase();
-      const good=v===a||sim(v,a)>=0.85;
-      if(good){$("#u-fb").innerHTML=`✅ <span class="word-en">${e[0]}</span>`;$("#u-fb").className="feedback ok";speak(e[0]);$("#u-chk").disabled=true;setTimeout(()=>answer(true),700);}
+      if(v===a||sim(v,a)>=0.85){$("#u-fb").innerHTML=`✅ <span class="word-en">${e[0]}</span>`;$("#u-fb").className="feedback ok";speak(e[0]);$("#u-chk").disabled=true;setTimeout(()=>answer(true),700);}
       else answer(false);
     };
     inp.onkeydown=ev=>{if(ev.key==="Enter")$("#u-chk").click();};
@@ -488,7 +526,7 @@ function renderRun(){
   /* ===== มินิเทสต์: สลับ 4 รูปแบบ ===== */
   if(s.type==="test"){
     const kinds=["en2th","th2en","listen","fill"];
-    const kind=kinds[(run.total-run.queue.length+(run.tries[w.id]||0))%4];
+    const kind=kinds[(run.doneRound.size+(run.tries[w.id]||0)+(r-1)*2)%4];
     let prompt="",label=x=>x.th;
     if(kind==="en2th")prompt=`<p class="prompt word-en">${w.w}</p><p class="stat center">${w.ipa||""}</p>`;
     if(kind==="th2en"){prompt=`<p class="prompt">${w.th}</p>`;label=x=>x.w;}
@@ -502,7 +540,8 @@ function renderRun(){
 
 function nextLearn(){
   run.learnIdx++;
-  if(run.learnIdx>=run.total){run.phase="drill";run.queue=shuffle(run.words.slice());toast("ทีนี้มาเช็คว่าจำได้ไหม — ตอบผิดจะวนกลับมาถามใหม่");}
+  if(run.learnIdx>=run.total){run.phase="drill";run.queue=shuffle(run.words.slice());
+    toast(`ทีนี้มาเช็คความจำ ${run.rounds} รอบ — ตอบผิดจะวนกลับมาถามใหม่`);}
   renderRun();
 }
 
