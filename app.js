@@ -2,7 +2,7 @@
  * ต่อยอดจาก vocab-trainer.html เดิม: โครงสร้าง/ชื่อฟังก์ชัน/คีย์ localStorage คงเดิม
  * เพิ่ม: โหลดคำจาก data/words.json, PWA (SW + install), แจ้งเตือนผ่าน SW, .ics, หน้าสถิติ, ธีม
  */
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.3.1";
 const $=s=>document.querySelector(s); // ต้องประกาศก่อนทุกส่วน (เดิมอยู่ใต้ loadVoices ทำให้เกิด TDZ error)
 
 /* ---------- DATA (โหลดจาก data/words.json) ---------- */
@@ -102,7 +102,10 @@ let qOk=0,qTotal=0,qLock=false;
 function nextQuiz(){
   qLock=false;const type=$("#q-type").value,ws=byCat($("#q-cat").value);
   if(ws.length<4){$("#q-box").innerHTML=`<div class="empty">ต้องมีอย่างน้อย 4 คำในหมวดนี้</div>`;return;}
-  const [ans,...rest]=shuffle(ws);const choices=shuffle([ans,...rest.slice(0,3)]);
+  const [ans,...rest]=shuffle(ws);
+  const sameCat=rest.filter(x=>x.cat===ans.cat).slice(0,3);
+  const distract=sameCat.length<3?[...sameCat,...rest.filter(x=>x.cat!==ans.cat).slice(0,3-sameCat.length)]:sameCat;
+  const choices=shuffle([ans,...distract]);
   let prompt="",label=x=>x.th;
   if(type==="en2th"){prompt=`<p class="prompt word-en">${ans.w}</p><p class="stat" style="text-align:center">${ans.ipa||""}</p>`;}
   if(type==="th2en"){prompt=`<p class="prompt">${ans.th}</p>`;label=x=>x.w;}
@@ -428,7 +431,10 @@ function fullCard(w,extra){
 }
 
 function choiceBlock(w,label){
-  const others=shuffle(allWords().filter(x=>x.id!==w.id)).slice(0,3);
+  /* ตัวเลือกลวงดึงจากหมวดเดียวกันก่อน (ยากขึ้น สมจริงกว่า) ไม่พอค่อยดึงหมวดอื่น */
+  const all=allWords(),pool=all.filter(x=>x.id!==w.id);
+  const same=shuffle(pool.filter(x=>x.cat===w.cat)).slice(0,3);
+  const others=same.length<3?[...same,...shuffle(pool.filter(x=>x.cat!==w.cat)).slice(0,3-same.length)]:same;
   return `<div class="choices">${shuffle([w,...others]).map(c=>`<button data-id="${c.id}">${label(c)}</button>`).join("")}</div>`;
 }
 function bindChoices(w){
