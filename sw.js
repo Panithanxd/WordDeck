@@ -2,7 +2,7 @@
  * cache-first สำหรับไฟล์แอปทั้งหมด (ใช้ออฟไลน์ได้)
  * + แจ้งเตือนตามตาราง: periodicsync / notification triggers / sync จากหน้าเว็บ
  */
-const VERSION = "wd-v1.4.0";
+const VERSION = "wd-v1.5.0";
 const APP_SHELL = [
   "./",
   "./index.html",

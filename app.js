@@ -2,7 +2,7 @@
  * ต่อยอดจาก vocab-trainer.html เดิม: โครงสร้าง/ชื่อฟังก์ชัน/คีย์ localStorage คงเดิม
  * เพิ่ม: โหลดคำจาก data/words.json, PWA (SW + install), แจ้งเตือนผ่าน SW, .ics, หน้าสถิติ, ธีม
  */
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.5.0";
 const $=s=>document.querySelector(s); // ต้องประกาศก่อนทุกส่วน (เดิมอยู่ใต้ loadVoices ทำให้เกิด TDZ error)
 
 /* ---------- IPA -> คำอ่านไทย (โดยประมาณ) ---------- */
@@ -103,7 +103,18 @@ function blankOut(sentence,word){
 /* IPA + คำอ่านไทยกำกับ */
 const rd=w=>w&&w.thr?`<span class="thr">${esc(w.thr)}</span>`:"";
 const ipaLine=w=>`<div class="ipa">${w.ipa||""}${w&&w.thr?` <span class="thr">${esc(w.thr)}</span>`:""}</div>`;
-const exHtml=w=>(w.ex||[]).map(e=>`<div class="ex"><div style="flex:1"><div class="en">${hi(e[0],w.w)}</div><div class="th">${e[1]||""}</div></div><button type="button" data-say="${esc(e[0])}">🔊</button></div>`).join("");
+let exSeq=0;
+const exHtml=w=>(w.ex||[]).map(e=>{
+  const id="ex"+(++exSeq);
+  const open=load(KEY_SHOWTH,0)==1;
+  return `<div class="ex"><div style="flex:1">
+    <div class="en">${hi(e[0],w.w)}</div>
+    ${e[2]?`<div class="exthr">${esc(e[2])}</div>`:""}
+    ${e[1]?`<div class="exth ${open?"show":""}" id="${id}" data-th="${esc(e[1])}">${open?esc(e[1]):`<button type="button" class="reveal" onclick="revealTh('${id}')">ลองแปลดูก่อน · แตะเพื่อดูคำแปล</button>`}</div>`:""}
+  </div><button type="button" data-say="${esc(e[0])}">🔊</button></div>`;
+}).join("");
+function revealTh(id){const el=$("#"+id);if(!el)return;el.textContent=el.dataset.th;el.classList.add("show");}
+function revealAllTh(){document.querySelectorAll(".exth:not(.show)").forEach(el=>{el.textContent=el.dataset.th;el.classList.add("show");});}
 let toastTimer=null;
 function toast(msg,btn){const t=$("#toast");t.innerHTML=esc(msg)+(btn?`<button id="toastBtn">${esc(btn.label)}</button>`:"");if(btn)$("#toastBtn").onclick=()=>{btn.fn();t.classList.remove("show");};t.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),btn?12000:3200);}
 
@@ -268,6 +279,9 @@ function renderEditor(){$("#t-editor").innerHTML=
   `<div class="rounds-set"><b>ต้องทวนกี่รอบถึงจะผ่าน</b>
     <div class="seg">${[1,2,3].map(n=>`<button class="${getRounds()===n?"on":""}" onclick="save('${KEY_ROUNDS}',${n});renderEditor();toast('ตั้งเป็น ${n} รอบแล้ว ใช้กับช่วงที่เริ่มหลังจากนี้')">${n} รอบ</button>`).join("")}</div>
     <p class="stat" style="margin:6px 0 0">ตอบถูกรอบแรกยังไม่ผ่าน ต้องเจอคำเดิมอีกในรอบถัดไปโดยถามคนละแบบ — รอบ 1 อังกฤษ→ความหมาย · รอบ 2 ความหมาย→อังกฤษ · รอบ 3 ฟังเสียง→เลือกคำ</p></div>`+
+  `<div class="rounds-set" style="margin-top:10px"><b>คำแปลประโยคตัวอย่าง</b>
+    <div class="seg">${[[0,"ซ่อนไว้ก่อน"],[1,"โชว์เลย"]].map(([v,t])=>`<button class="${(+load(KEY_SHOWTH,0))===v?"on":""}" onclick="save('${KEY_SHOWTH}',${v});renderEditor();toast('${t}')">${t}</button>`).join("")}</div>
+    <p class="stat" style="margin:6px 0 0">ซ่อนไว้ก่อน = เห็นประโยคอังกฤษกับคำอ่าน ลองแปลเองในใจ แล้วแตะเพื่อเฉลย</p></div>`+
   `<p class="stat" style="margin-top:14px">ตั้งเวลาให้ตรงกับวันของคุณ (ตื่น 06:00 · ทำงาน 07:00–19:00) — เพิ่ม/ลบช่วงได้ แล้วกด "ดาวน์โหลด .ics" ใหม่ถ้าใช้ Google Calendar</p>`+
   sched.map((x,i)=>`<div class="row"><input type="time" value="${x.t}" onchange="sched[${i}].t=this.value;saveSched()"><input type="text" value="${esc(x.name)}" onchange="sched[${i}].name=this.value;saveSched()"><select onchange="sched[${i}].type=this.value;saveSched()">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${x.type===k?"selected":""}>${v}</option>`).join("")}</select><button class="icon" onclick="sched.splice(${i},1);saveSched();renderEditor()">🗑</button>
   <div></div><div class="stat">จำนวนคำ <input type="number" min="0" max="30" value="${x.n}" style="width:70px" onchange="sched[${i}].n=+this.value;saveSched()"></div><div></div><div></div></div>`).join("")+
@@ -360,6 +374,7 @@ let run=null;
 const MAX_TRIES=3;        // ผิดซ้ำเกินนี้ในรอบเดียว → พักไว้ ไปโผล่ในช่วง "ทวนคำที่ยังไม่แม่น"
 const REQUEUE_GAP=3;      // ตอบผิดแล้ววนกลับมาถามใหม่หลังผ่านไปกี่คำ
 const KEY_ROUNDS="wd_rounds";
+const KEY_SHOWTH="wd_showth";   // ซ่อนคำแปลประโยคไว้ก่อน (0) หรือโชว์เลย (1)
 const getRounds=()=>Math.min(3,Math.max(1,+load(KEY_ROUNDS,2)||2));
 
 /* ชื่อรูปแบบคำถามของแต่ละรอบ */

@@ -193,3 +193,11 @@ header .hdr-actions{display:flex;gap:6px;align-items:center}
 .wrong .thr{font-size:13px}
 td .thr{font-size:13px}
 .q .stat .thr{font-size:15px}
+
+/* ===== ประโยคตัวอย่าง: คำอ่าน + คำแปลที่ซ่อนไว้ ===== */
+.ex .exthr{color:var(--amber);font-size:14px;margin-top:3px;font-family:"Sarabun",sans-serif;line-height:1.5}
+.ex .exth{margin-top:5px;color:var(--muted);font-size:14px;min-height:22px}
+.ex .exth.show{color:var(--muted)}
+.ex .reveal{background:transparent;border:1px dashed var(--line);border-radius:8px;
+  padding:4px 10px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;width:100%;text-align:center}
+.ex .reveal:hover{border-color:var(--sea);color:var(--sea)}
