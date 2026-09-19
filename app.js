@@ -2,8 +2,58 @@
  * ต่อยอดจาก vocab-trainer.html เดิม: โครงสร้าง/ชื่อฟังก์ชัน/คีย์ localStorage คงเดิม
  * เพิ่ม: โหลดคำจาก data/words.json, PWA (SW + install), แจ้งเตือนผ่าน SW, .ics, หน้าสถิติ, ธีม
  */
-const APP_VERSION = "1.3.1";
+const APP_VERSION = "1.4.0";
 const $=s=>document.querySelector(s); // ต้องประกาศก่อนทุกส่วน (เดิมอยู่ใต้ loadVoices ทำให้เกิด TDZ error)
+
+/* ---------- IPA -> คำอ่านไทย (โดยประมาณ) ---------- */
+const TH_ONSET={'tʃ':'ช','dʒ':'จ','ʃ':'ช','ʒ':'ช','θ':'ธ','ð':'ด','ŋ':'ง','p':'พ','b':'บ','t':'ท','d':'ด','k':'ค','ɡ':'ก','g':'ก','f':'ฟ','v':'ว','s':'ส','z':'ซ','h':'ฮ','m':'ม','n':'น','l':'ล','r':'ร','j':'ย','w':'ว','x':'ค'};
+const TH_CODA={'tʃ':'ช','dʒ':'จ','ʃ':'ช','ʒ':'ช','θ':'ธ','ð':'ธ','ŋ':'ง','p':'ป','b':'บ','t':'ท','d':'ด','k':'ก','ɡ':'ก','g':'ก','f':'ฟ','v':'ฟ','s':'ส','z':'ส','h':'','m':'ม','n':'น','l':'ล','r':'ร','j':'ย','w':'ว'};
+const TH_VOWEL=[['aɪər',['ไ@เออร์','ไ@เออร์']],['aʊər',['เ@าเออร์','เ@าเออร์']],['aɪə',['ไ@เออ','ไ@เออ']],['aʊə',['เ@าเออ','เ@าเออ']],['juːr',['@ิวร์','@ิวร์']],['juː',['@ิว','@ิว']],['jʊ',['@ิว','@ิว']],['ɪər',['เ@ียร์','เ@ียร์']],['eər',['แ@ร์','แ@ร์']],['ʊər',['@ัวร์','@ัวร์']],['ɑːr',['@าร์','@าร์']],['ɔːr',['@อร์','@อร์']],['ɜːr',['เ@อร์','เ@อร์']],['iːr',['@ียร์','@ียร์']],['uːr',['@ัวร์','@ัวร์']],['ər',['เ@อร์','เ@อร์']],['ɚ',['เ@อร์','เ@อร์']],['ɝ',['เ@อร์','เ@อร์']],['iː',['@ี','@ี']],['ɪə',['เ@ีย','เ@ีย']],['eə',['แ@','แ@']],['ʊə',['@ัว','@ัว']],['eɪ',['เ@','เ@']],['aɪ',['ไ@','ไ@']],['ɔɪ',['@อย','@อย']],['ɔi',['@อย','@อย']],['aʊ',['เ@า','เ@า']],['əʊ',['โ@','โ@']],['oʊ',['โ@','โ@']],['oː',['โ@','โ@']],['ɜː',['เ@อ','เ@ิ']],['ɑː',['@า','@า']],['ɔː',['@อ','@อ']],['uː',['@ู','@ู']],['ɪ',['@ิ','@ิ']],['ʊ',['@ุ','@ุ']],['e',['เ@','เ@็']],['ɛ',['แ@','แ@็']],['æ',['แ@','แ@']],['ɑ',['@า','@า']],['ɒ',['@อ','@อ']],['ɔ',['@อ','@อ']],['ʌ',['@ะ','@ั']],['ə',['@ะ','@ั']],['i',['@ี','@ิ']],['u',['@ู','@ุ']],['a',['@า','@า']],['o',['โ@','โ@']],['y',['@ี','@ิ']]];
+const TH_VK=TH_VOWEL.map(v=>v[0]), TH_VM=Object.fromEntries(TH_VOWEL);
+const TH_OK=Object.keys(TH_ONSET).sort((a,b)=>b.length-a.length);
+const TH_CK=Object.keys(TH_CODA).sort((a,b)=>b.length-a.length);
+function thTake(s,i,keys){for(const k of keys)if(s.startsWith(k,i))return[k,i+k.length];return[null,i];}
+function thParse(syl){
+  let i=0,onset=[];
+  while(i<syl.length){
+    if(thTake(syl,i,TH_VK)[0]!==null)break;
+    const[k,ni]=thTake(syl,i,TH_OK);
+    if(k===null){i++;continue;}
+    onset.push(k);i=ni;
+  }
+  let vk;[vk,i]=thTake(syl,i,TH_VK);
+  const coda=[];
+  while(i<syl.length){const[k,ni]=thTake(syl,i,TH_CK);if(k===null){i++;continue;}coda.push(k);i=ni;}
+  return[onset,vk,coda];
+}
+function thRender(onset,vk,coda,first){
+  const on=onset.filter(c=>c in TH_ONSET).map(c=>c==="ð"?(first?"ด":"ธ"):TH_ONSET[c]);
+  if(vk==null)return on.join("");
+  const cd=coda.map(c=>TH_CODA[c]).filter(Boolean);
+  const form=TH_VM[vk][cd.length?1:0];
+  const base=on.length?on[on.length-1]:"อ";
+  const pre=on.slice(0,-1).join("");
+  const at=form.indexOf("@"),lead=form.slice(0,at),trail=form.slice(at+1);
+  let out=pre.startsWith("ส")?"ส"+lead+pre.slice(1)+base+trail:lead+pre+base+trail;
+  if(cd.length){out+=cd[0];if(cd.length>1)out+=cd[cd.length-1]+"์";}
+  return out;
+}
+function ipaToThai(ipa){
+  if(!ipa)return"";
+  const s=ipa.trim().replace(/^\/|\/$/g,"").replace(/^\[|\]$/g,"").replace(/[()]/g,"");
+  return s.split(" ").filter(Boolean).map(w=>{
+    const parts=w.split(/[.ˈˌ-]/).filter(Boolean).map(thParse);
+    for(let i=1;i<parts.length;i++){
+      const[on,vk,co]=parts[i];
+      if(!on.length&&vk!=null&&parts[i-1][2].length){
+        const p=parts[i-1],moved=p[2][p[2].length-1];
+        parts[i-1]=[p[0],p[1],p[2].slice(0,-1)];
+        parts[i]=[[moved],vk,co];
+      }
+    }
+    return parts.map((p,i)=>thRender(p[0],p[1],p[2],i===0)).filter(Boolean).join("-");
+  }).join(" ");
+}
 
 /* ---------- DATA (โหลดจาก data/words.json) ---------- */
 let SEED = [];
@@ -11,7 +61,7 @@ async function loadSeed(){
   try{
     const r = await fetch("./data/words.json", {cache:"no-cache"});
     const d = await r.json();
-    SEED = (d.words||d).map((x,i)=>({...x, id: x.id || "s"+i}));
+    SEED = (d.words||d).map((x,i)=>({...x, id: x.id || "s"+i, thr: x.thr || ipaToThai(x.ipa)}));
   }catch(e){ console.error("โหลด words.json ไม่ได้", e); toast("โหลดคลังคำไม่ได้ — ลองรีเฟรช"); }
 }
 
@@ -19,7 +69,7 @@ async function loadSeed(){
 const KEY_WORDS="wd_words", KEY_PROG="wd_prog", KEY_SCHED="wd_sched", KEY_DAYS="wd_days", KEY_NOTIFIED="wd_notified", KEY_THEME="wd_theme";
 const load=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch{return d}};
 const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
-let custom=load(KEY_WORDS,[]);
+let custom=load(KEY_WORDS,[]).map(x=>({...x, thr: x.thr || ipaToThai(x.ipa)}));
 let prog=load(KEY_PROG,{}); // id -> {box, due, wrong}
 const allWords=()=>[...SEED,...custom];
 const getP=id=>prog[id]||{box:0,due:0,wrong:0};
@@ -50,6 +100,9 @@ function blankOut(sentence,word){
   const first=new RegExp(`\\b${rxEsc(word.split(" ")[0])}\\w*`,"i");
   return sentence.replace(first,"______");
 }
+/* IPA + คำอ่านไทยกำกับ */
+const rd=w=>w&&w.thr?`<span class="thr">${esc(w.thr)}</span>`:"";
+const ipaLine=w=>`<div class="ipa">${w.ipa||""}${w&&w.thr?` <span class="thr">${esc(w.thr)}</span>`:""}</div>`;
 const exHtml=w=>(w.ex||[]).map(e=>`<div class="ex"><div style="flex:1"><div class="en">${hi(e[0],w.w)}</div><div class="th">${e[1]||""}</div></div><button type="button" data-say="${esc(e[0])}">🔊</button></div>`).join("");
 let toastTimer=null;
 function toast(msg,btn){const t=$("#toast");t.innerHTML=esc(msg)+(btn?`<button id="toastBtn">${esc(btn.label)}</button>`:"");if(btn)$("#toastBtn").onclick=()=>{btn.fn();t.classList.remove("show");};t.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),btn?12000:3200);}
@@ -81,7 +134,7 @@ function renderFlash(){
   if(!deck.length){c.innerHTML=`<div class="empty">ไม่มีคำที่ต้องทบทวนตอนนี้ 🎉<br>ลองเลือก "ทุกคำ" หรือกลับมาใหม่พรุ่งนี้</div>`;a.innerHTML="";return;}
   if(fi>=deck.length){c.innerHTML=`<div class="empty">จบรอบแล้ว! ทบทวนไป ${deck.length} คำ</div>`;a.innerHTML=`<button class="btn primary" onclick="startFlash()">เริ่มรอบใหม่</button>`;$("#f-bar").style.width="100%";return;}
   const w=deck[fi],p=getP(w.id);
-  c.innerHTML=`<span class="box">กล่อง ${p.box}/4</span><div class="pos">${w.pos||""}</div><h2 class="big word-en">${w.w}</h2><div class="ipa">${w.ipa||""}</div>
+  c.innerHTML=`<span class="box">กล่อง ${p.box}/4</span><div class="pos">${w.pos||""}</div><h2 class="big word-en">${w.w}</h2>${ipaLine(w)}
     <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="speak" data-say="${esc(w.w)}">🔊 ฟัง</button><button class="speak slow" onclick="speak('${w.w.replace(/'/g,"\\'")}',0.6)">🐢 ช้า</button></div>
     ${flipped?`<div class="back"><p class="meaning">${w.th}</p>${exHtml(w)}</div>`:""}`;
   a.innerHTML=flipped?`<button class="btn again" onclick="grade(false)">1 · ยังไม่ได้</button><button class="btn good" onclick="grade(true)">2 · จำได้</button>`:`<button class="btn primary" onclick="flip()">พลิกดูความหมาย</button>`;
@@ -107,7 +160,7 @@ function nextQuiz(){
   const distract=sameCat.length<3?[...sameCat,...rest.filter(x=>x.cat!==ans.cat).slice(0,3-sameCat.length)]:sameCat;
   const choices=shuffle([ans,...distract]);
   let prompt="",label=x=>x.th;
-  if(type==="en2th"){prompt=`<p class="prompt word-en">${ans.w}</p><p class="stat" style="text-align:center">${ans.ipa||""}</p>`;}
+  if(type==="en2th"){prompt=`<p class="prompt word-en">${ans.w}</p><p class="stat" style="text-align:center">${ans.ipa||""} ${rd(ans)}</p>`;}
   if(type==="th2en"){prompt=`<p class="prompt">${ans.th}</p>`;label=x=>x.w;}
   if(type==="listen"){prompt=`<div style="text-align:center"><button class="speak" data-say="${esc(ans.w)}" style="font-size:20px">🔊 ฟังคำ</button></div>`;label=x=>x.w;setTimeout(()=>speak(ans.w),300);}
   if(type==="fill"){const e=(ans.ex||[])[0];if(!e){return nextQuiz();}prompt=`<p class="prompt word-en" style="font-size:24px">${blankOut(e[0],ans.w)}</p><p class="stat" style="text-align:center">${e[1]||""}</p>`;label=x=>x.w;}
@@ -128,7 +181,7 @@ $("#q-cat").onchange=$("#q-type").onchange=nextQuiz;
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let sWord=null,rec=null;
 function nextSpeak(){const ws=byCat($("#s-cat").value);sWord=shuffle(ws)[0];$("#heard").textContent="";$("#s-score").textContent="";
   if(!sWord){$("#s-card").innerHTML=`<div class="empty">ไม่มีคำในหมวดนี้</div>`;return;}
-  $("#s-card").innerHTML=`<div class="pos">${sWord.pos||""}</div><h2 class="big word-en">${sWord.w}</h2><div class="ipa">${sWord.ipa||""}</div><div style="display:flex;gap:8px;justify-content:center"><button class="speak" data-say="${esc(sWord.w)}">🔊 ฟังต้นแบบ</button><button class="speak slow" onclick="speak('${sWord.w.replace(/'/g,"\\'")}',0.6)">🐢 ช้า</button></div><p class="stat" style="margin-top:14px">${sWord.th}</p>`;
+  $("#s-card").innerHTML=`<div class="pos">${sWord.pos||""}</div><h2 class="big word-en">${sWord.w}</h2>${ipaLine(sWord)}<div style="display:flex;gap:8px;justify-content:center"><button class="speak" data-say="${esc(sWord.w)}">🔊 ฟังต้นแบบ</button><button class="speak slow" onclick="speak('${sWord.w.replace(/'/g,"\\'")}',0.6)">🐢 ช้า</button></div><p class="stat" style="margin-top:14px">${sWord.th}</p>`;
   if(!SR)$("#s-hint").textContent="เบราว์เซอร์นี้ไม่รองรับการฟังเสียงพูด (ใช้ Chrome หรือ Edge) — ฟังต้นแบบแล้วพูดตามได้";}
 $("#s-next").onclick=nextSpeak;$("#s-cat").onchange=nextSpeak;
 function sim(a,b){a=a.toLowerCase().replace(/[^a-z ]/g,"");b=b.toLowerCase().replace(/[^a-z ]/g,"");const m=a.length,n=b.length,d=[...Array(m+1)].map((_,i)=>[i,...Array(n).fill(0)]);for(let j=1;j<=n;j++)d[0][j]=j;for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return 1-d[m][n]/Math.max(m,n,1);}
@@ -150,10 +203,11 @@ $("#mic").onclick=()=>{
 function renderList(){const q=$("#search").value.toLowerCase(),c=$("#l-cat").value;const ws=byCat(c).filter(w=>w.w.toLowerCase().includes(q)||w.th.includes(q));
   $("#l-count").textContent=`${ws.length} คำ`;
   $("#l-body").innerHTML=ws.map(w=>{const p=getP(w.id);const st=!prog[w.id]?["","ใหม่"]:p.box>=3?["b3","จำได้ดี"]:p.box===0?["b0","ต้องทบทวน"]:["b1","กำลังเรียน"];
-    return `<tr><td><span class="word-en">${w.w}</span><br><span class="stat">${w.ipa||""}</span> <button class="icon" data-say="${esc(w.w)}">🔊</button></td><td>${w.th}<br><span class="stat">${(w.ex||[]).map(e=>e[0]).join(" · ")}</span></td><td><span class="tag">${w.cat}</span></td><td><span class="tag ${st[0]}">${st[1]}</span></td><td>${w.id.startsWith("c")?`<button class="icon" onclick="delWord('${w.id}')" title="ลบ">🗑</button>`:""}</td></tr>`}).join("")||`<tr><td colspan="5" class="empty">ไม่พบคำ</td></tr>`;}
+    return `<tr><td><span class="word-en">${w.w}</span><br><span class="stat">${w.ipa||""}</span> ${rd(w)} <button class="icon" data-say="${esc(w.w)}">🔊</button></td><td>${w.th}<br><span class="stat">${(w.ex||[]).map(e=>e[0]).join(" · ")}</span></td><td><span class="tag">${w.cat}</span></td><td><span class="tag ${st[0]}">${st[1]}</span></td><td>${w.id.startsWith("c")?`<button class="icon" onclick="delWord('${w.id}')" title="ลบ">🗑</button>`:""}</td></tr>`}).join("")||`<tr><td colspan="5" class="empty">ไม่พบคำ</td></tr>`;}
 $("#search").oninput=$("#l-cat").onchange=renderList;
 $("#addForm").onsubmit=e=>{e.preventDefault();const ex=$("#a-ex").value.split("\n").map(l=>l.trim()).filter(Boolean).map(l=>l.split("|").map(s=>s.trim()));
-  custom.push({id:"c"+Date.now(),w:$("#a-word").value.trim(),th:$("#a-th").value.trim(),pos:$("#a-pos").value.trim(),cat:$("#a-cat").value.trim()||"My words",ipa:$("#a-ipa").value.trim(),ex});
+  const _ipa=$("#a-ipa").value.trim();
+  custom.push({id:"c"+Date.now(),w:$("#a-word").value.trim(),th:$("#a-th").value.trim(),pos:$("#a-pos").value.trim(),cat:$("#a-cat").value.trim()||"My words",ipa:_ipa,thr:$("#a-thr").value.trim()||ipaToThai(_ipa),ex});
   save(KEY_WORDS,custom);e.target.reset();fillCats();renderList();toast("เพิ่มคำแล้ว");};
 function delWord(id){if(!confirm("ลบคำนี้?"))return;custom=custom.filter(w=>w.id!==id);delete prog[id];save(KEY_WORDS,custom);save(KEY_PROG,prog);fillCats();renderList();}
 $("#resetProg").onclick=()=>{if(confirm("ล้างความคืบหน้าทั้งหมด (กล่อง Leitner, สถิติรายวัน)?")){prog={};days={};save(KEY_PROG,prog);saveDays();renderList();toast("ล้างแล้ว");}};
@@ -425,7 +479,7 @@ function runHead(){
 
 /* การ์ดคำศัพท์เต็ม (ใช้ตอนเรียนใหม่และตอนทวนหลังตอบผิด) */
 function fullCard(w,extra){
-  return `<div class="card"><div class="pos">${w.pos||""}</div><h2 class="big word-en">${w.w}</h2><div class="ipa">${w.ipa||""}</div>
+  return `<div class="card"><div class="pos">${w.pos||""}</div><h2 class="big word-en">${w.w}</h2>${ipaLine(w)}
     <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="speak" data-say="${esc(w.w)}">🔊 ฟัง</button><button class="speak slow" onclick="speak('${w.w.replace(/'/g,"\\'")}',0.6)">🐢 ช้า</button></div>
     <div class="back"><p class="meaning">${w.th}</p>${exHtml(w)}${extra||""}</div></div>`;
 }
@@ -482,7 +536,7 @@ function renderRun(){
       : `<div class="empty">ผ่านครบ ${run.rounds} รอบแล้ว ${run.passed.size}/${run.total} คำ 👍<br><span class="stat">ตอบถูกตั้งแต่ครั้งแรก ${run.firstOk.size} คำ</span></div>`;
     const parkBox=parkList.length?`<div class="card" style="min-height:auto;display:block;text-align:left"><h3 style="margin-top:0">🔁 คำที่ยังไม่แม่น (${parkList.length})</h3>
       <p class="stat" style="margin-top:0">ผิดหลายรอบ เก็บไว้ทวนช่วงถัดไป กดฟังทวนได้เลย</p>
-      <ul class="wrong">${parkList.map(w=>`<li><div><span class="word-en">${w.w}</span> <span class="m">${w.th}</span></div><button class="icon" data-say="${esc(w.w)}">🔊</button></li>`).join("")}</ul></div>`:"";
+      <ul class="wrong">${parkList.map(w=>`<li><div><span class="word-en">${w.w}</span> ${rd(w)}<br><span class="m">${w.th}</span></div><button class="icon" data-say="${esc(w.w)}">🔊</button></li>`).join("")}</ul></div>`:"";
     R.innerHTML=runHead()+`<div class="card" style="min-height:auto">${body}</div>`+parkBox+
       `<div class="actions"><button class="btn primary" onclick="endRun()">บันทึกและกลับหน้าวันนี้</button>
        <button class="btn again" onclick="endRun();runSession('relearn')">🔁 ทวนซ้ำทั้งหมดอีกรอบ</button></div>`;
@@ -496,7 +550,7 @@ function renderRun(){
     const thFirst=(r===2);   // รอบ 2 กลับด้าน: เห็นความหมายไทย ต้องนึกคำอังกฤษเอง
     const front=thFirst
       ? `<div class="card"><p class="stat">คำนี้ภาษาอังกฤษว่าอะไร</p><h2 class="meaning" style="font-size:28px">${w.th}</h2></div>`
-      : `<div class="card"><div class="pos">${w.pos||""}</div><h2 class="big word-en">${w.w}</h2><div class="ipa">${w.ipa||""}</div>
+      : `<div class="card"><div class="pos">${w.pos||""}</div><h2 class="big word-en">${w.w}</h2>${ipaLine(w)}
          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="speak" data-say="${esc(w.w)}">🔊 ฟัง</button><button class="speak slow" onclick="speak('${w.w.replace(/'/g,"\\'")}',0.6)">🐢 ช้า</button></div></div>`;
     R.innerHTML=head+(run.flipped?fullCard(w):front)
       +`<div class="actions">${run.flipped
@@ -509,7 +563,7 @@ function renderRun(){
   if(s.type==="recap"||s.type==="new"){
     if(r===1){
       R.innerHTML=head+`<div class="q"><p class="stat center" style="margin:0">คำนี้แปลว่าอะไร</p>
-        <p class="prompt word-en">${w.w}</p><p class="stat center">${w.ipa||""}</p>
+        <p class="prompt word-en">${w.w}</p><p class="stat center">${w.ipa||""} ${rd(w)}</p>
         ${choiceBlock(w,x=>x.th)}</div>`;
     }else if(r===2){
       R.innerHTML=head+`<div class="q"><p class="stat center" style="margin:0">ความหมายนี้ตรงกับคำไหน</p>
@@ -549,7 +603,7 @@ function renderRun(){
     const kinds=["en2th","th2en","listen","fill"];
     const kind=kinds[(run.doneRound.size+(run.tries[w.id]||0)+(r-1)*2)%4];
     let prompt="",label=x=>x.th;
-    if(kind==="en2th")prompt=`<p class="prompt word-en">${w.w}</p><p class="stat center">${w.ipa||""}</p>`;
+    if(kind==="en2th")prompt=`<p class="prompt word-en">${w.w}</p><p class="stat center">${w.ipa||""} ${rd(w)}</p>`;
     if(kind==="th2en"){prompt=`<p class="prompt">${w.th}</p>`;label=x=>x.w;}
     if(kind==="listen"){prompt=`<div class="center"><button class="speak" data-say="${esc(w.w)}">🔊 ฟังคำ</button></div>`;label=x=>x.w;setTimeout(()=>speak(w.w),300);}
     if(kind==="fill"){const e=(w.ex||[["",""]])[0];prompt=`<p class="prompt word-en" style="font-size:24px">${blankOut(e[0],w.w)}</p><p class="stat center">${e[1]||""}</p>`;label=x=>x.w;}
@@ -591,7 +645,7 @@ function renderStats(){
     counts.map((c,i)=>`<div class="boxcol"><div class="boxbar ${i===0?"b0":""}" style="height:${c/max*100}%"><span>${c}</span></div><div class="boxlbl">กล่อง ${i}<br>${i===0?"วันนี้":INTERVALS[i]+" วัน"}</div></div>`).join("");
   // 10 คำผิดบ่อย
   const worst=ws.map(w=>({w,n:getP(w.id).wrong||0})).filter(x=>x.n>0).sort((a,b)=>b.n-a.n).slice(0,10);
-  $("#wrongList").innerHTML=worst.length?worst.map((x,i)=>`<li><span class="rank">${i+1}</span><div><span class="word-en">${x.w.w}</span> <span class="m">${x.w.th}</span></div><button class="icon" data-say="${esc(x.w.w)}">🔊</button><span class="cnt">ผิด ${x.n} ครั้ง</span></li>`).join(""):`<li class="stat">ยังไม่มีข้อมูล — ทำมินิเทสต์หรือทบทวนก่อน</li>`;
+  $("#wrongList").innerHTML=worst.length?worst.map((x,i)=>`<li><span class="rank">${i+1}</span><div><span class="word-en">${x.w.w}</span> ${rd(x.w)}<br><span class="m">${x.w.th}</span></div><button class="icon" data-say="${esc(x.w.w)}">🔊</button><span class="cnt">ผิด ${x.n} ครั้ง</span></li>`).join(""):`<li class="stat">ยังไม่มีข้อมูล — ทำมินิเทสต์หรือทบทวนก่อน</li>`;
 }
 
 /* ---------- PWA: Service Worker + Install ---------- */

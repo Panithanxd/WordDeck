@@ -186,3 +186,10 @@ header .hdr-actions{display:flex;gap:6px;align-items:center}
 .rounds-set .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:8px;background:var(--paper)}
 .rounds-set .seg button{background:transparent;border:0;padding:8px 18px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer}
 .rounds-set .seg button.on{background:var(--sea);color:#fff}
+
+/* ===== คำอ่านไทยกำกับ ===== */
+.thr{font-family:"Sarabun",sans-serif;color:var(--amber);font-weight:600;white-space:nowrap}
+.card .ipa .thr{display:block;font-size:17px;margin-top:2px}
+.wrong .thr{font-size:13px}
+td .thr{font-size:13px}
+.q .stat .thr{font-size:15px}
